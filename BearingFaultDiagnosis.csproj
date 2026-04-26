@@ -1,0 +1,62 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="BearingFaultDiagnosis\**" />
+    <Compile Remove="x64\**" />
+    <EmbeddedResource Remove="BearingFaultDiagnosis\**" />
+    <EmbeddedResource Remove="x64\**" />
+    <None Remove="BearingFaultDiagnosis\**" />
+    <None Remove="x64\**" />
+    <Page Remove="BearingFaultDiagnosis\**" />
+    <Page Remove="x64\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="appsettings.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.14" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.14" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
+    <PackageReference Include="NWaves" Version="0.9.6" />
+    <PackageReference Include="ScottPlot.WPF" Version="5.1.57" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Behaviors\" />
+    <Folder Include="Controls\" />
+    <Folder Include="Converters\" />
+    <Folder Include="Extensions\" />
+    <Folder Include="Resources\Fonts\" />
+    <Folder Include="Resources\Images\" />
+    <Folder Include="Resources\Locales\" />
+    <Folder Include="Resources\Styles\" />
+    <Folder Include="Utils\" />
+    <Folder Include="Views\UserControls\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HighPerformanceComputing\HighPerformanceComputing.vcxproj" />
+  </ItemGroup>
+
+</Project>
