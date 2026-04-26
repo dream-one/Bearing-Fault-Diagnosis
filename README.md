@@ -10,10 +10,12 @@
 
 - **企业级应用架构：** 基于 **.NET 8** 搭建跨平台 **MVVM** 客户端，并引入了泛型主机架构（Generic Host）实现全局服务依赖注入（Dependency Injection）与对象生命周期管理。
 - **高性能数据采集：** 基于原生 **TCP Socket** 封装异步通信模块，引入**生产者-消费者**并发模型与 `ConcurrentQueue` 线程安全队列，可以安全稳定地处理每秒 2000 次的高频振动数据流。
-- **跨语言零拷贝计算优化：** 出于性能考量，将 FFT（快速傅里叶变换）等核心或高频触发的信号处理业务逻辑采用 **C++** 封装为 DLL。并通过 **P/Invoke** 实现 C# 与 C++ 数组之间的**零拷贝内存交互**，极大地避免了由于大量数据引发的垃圾回收（GC）开销，显著提升了实时诊断算法的计算速度与吞吐量。
+- **跨语言零拷贝计算优化：** 针对密集型计算场景设计了专用的 **C++ 高性能计算模块 (HighPerformanceComputing)**。将 FFT（快速傅里叶变换）、阶次跟踪 (Order Tracking) 等核心算法采用 C++ 封装为动态链接库 (DLL)；通过 **P/Invoke** 实现 C# 与 C++ 数组之间的**零拷贝内存交互**，极大地避免了大量浮点数据在托管与非托管内存切换时引发的垃圾回收（GC）开销，显著提升了实时流数据的处理速度与系统吞吐量。
 - **现代化图表渲染：** 结合 **ScottPlot** 提供每秒几十帧的高流畅度波形渲染能力，以图形化手段实时展示波形波动趋势。
 
 ## 📂 项目结构说明
+
+本仓库采用多项目解决方案（包含 C# 前端及业务层与 C++ 算法层）：
 
 ```text
  ┣ 📁 Behaviors       # 存放附加行为（Attached Behaviors）
@@ -21,6 +23,7 @@
  ┣ 📁 Converters      # 存放各种数据绑定转换器（IValueConverter / IMultiValueConverter）
  ┣ 📁 Core            # 核心基础类（如：中介者、基类、全局配置、常量等）
  ┣ 📁 Extensions      # 存放 C# 扩展方法
+ ┣ 📁 HighPerformanceComputing # C++ 核心算法工程（负责 DSP、FFT 信号隔离计算与 DLL 导出）
  ┣ 📁 Models          # 存放数据模型、实体类、DTO 等
  ┣ 📁 Resources       # 存放静态资源(包含文字、图表、全局样式等)
  ┣ 📁 Services        # 存放业务服务、数据访问服务、通信等
@@ -36,12 +39,12 @@
 
 ## 🚀 快速启动
 
-1. 确保已安装好 **.NET 8 SDK** 以及支持 **C++ 交叉编译或加载支持桌面库** 环境的 Visual Studio。
+1. 确保已安装好 **.NET 8 SDK** 以及支持 **C++ 桌面开发工作负载**（MSVC、C++ CMake 等）的 Visual Studio。
 2. 使用 `git clone <仓库地址>` 将项目克隆至本地。
 3. 双击 `BearingFaultDiagnosis.sln` 打开项目。
-4. 在需要的情况下还原 NuGet 依赖。
-5. （如有）确保所需的关联 C++ DSP / FFT DLL 能够在运行路径中被 P/Invoke 正确发现。
-6. 点击上方「启动」编译并运行此 WPF 应用程序。
+4. 编译时，Visual Studio 会自动按工程依赖顺序，先编译 `HighPerformanceComputing` 项目生成 DLL，再编译 C# 主程序。
+5. 在需要的情况下还原 NuGet 依赖。
+6. 点击上方「启动」编译并运行此上位机系统应用程序。
 
 ---
 
