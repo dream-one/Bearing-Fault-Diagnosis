@@ -38,5 +38,8 @@
     <ClCompile Include="OrderTracking.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="CWT.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

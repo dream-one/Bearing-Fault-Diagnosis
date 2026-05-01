@@ -44,7 +44,7 @@ namespace BearingFaultDiagnosis.Services.Implements
 
         public async Task ProcessFolderAsync(string folderPath, Action<string> onMessage, Action<PuMetadata> onFileRead)
         {
-            string[] binFiles = System.IO.Directory.GetFiles(folderPath, "*.bin", System.IO.SearchOption.AllDirectories);
+            string[] binFiles = await Task.Run(() => System.IO.Directory.GetFiles(folderPath, "*.bin", System.IO.SearchOption.AllDirectories));
             onMessage?.Invoke($"已选择文件夹: {folderPath}");
             onMessage?.Invoke($"共找到 {binFiles.Length} 个 .bin 文件 (包含子文件夹)。");
 
@@ -52,7 +52,7 @@ namespace BearingFaultDiagnosis.Services.Implements
             {
                 string baseName = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(file), System.IO.Path.GetFileNameWithoutExtension(file));
                 onMessage?.Invoke($"找到文件: {System.IO.Path.GetFileNameWithoutExtension(file)}");
-                var (signData, meta) = ReadWithMeta(baseName);
+                var (signData, meta) = await ReadWithMetaAsync(baseName);
                 this.puMetadata = meta;
                 onFileRead?.Invoke(meta);
                 await TestFlushAsync(signData);
@@ -61,7 +61,7 @@ namespace BearingFaultDiagnosis.Services.Implements
 
         public async Task TestFlushAsync(double[] signData)
         {
-            int chunkSize = 1027;       // 每批推送 200 个点
+            int chunkSize = 1024;       // 每批推送 200 个点
             int delayMs = 16;          // 每批之间等待 50 ms
             for (int i = 0; i < signData.Length; i += chunkSize)
             {
@@ -74,22 +74,29 @@ namespace BearingFaultDiagnosis.Services.Implements
                 await Task.Delay(delayMs);
             }
         }
-        private double[] ReadBin(string binPath)
+
+        private async Task<double[]> ReadBinAsync(string binPath)
         {
-            var bytes = File.ReadAllBytes(binPath);
-            var doubles = new double[bytes.Length / 8];
-            Buffer.BlockCopy(bytes, 0, doubles, 0, bytes.Length);
-            return doubles;
+            return await Task.Run(async () =>
+            {
+                var bytes = await File.ReadAllBytesAsync(binPath).ConfigureAwait(false);
+                var doubles = new double[bytes.Length / 8];
+                Buffer.BlockCopy(bytes, 0, doubles, 0, bytes.Length);
+                return doubles;
+            });
         }
 
-        private (double[] signal, PuMetadata meta) ReadWithMeta(string basePathWithoutExt)
+        private async Task<(double[] signal, PuMetadata meta)> ReadWithMetaAsync(string basePathWithoutExt)
         {
-            var binPath = basePathWithoutExt + ".bin";
-            var jsonPath = basePathWithoutExt + ".json";
-            var signal = ReadBin(binPath);
-            var json = File.ReadAllText(jsonPath);
-            var meta = JsonSerializer.Deserialize<PuMetadata>(json);
-            return (signal, meta);
+            return await Task.Run(async () =>
+            {
+                var binPath = basePathWithoutExt + ".bin";
+                var jsonPath = basePathWithoutExt + ".json";
+                var signal = await ReadBinAsync(binPath).ConfigureAwait(false);
+                var json = await File.ReadAllTextAsync(jsonPath).ConfigureAwait(false);
+                var meta = JsonSerializer.Deserialize<PuMetadata>(json);
+                return (signal, meta);
+            });
         }
         private void UpdatePoint(double x, double y, double z)
         {

@@ -1,17 +1,20 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 using BearingFaultDiagnosis.Services.Interfaces;
 
 namespace BearingFaultDiagnosis.Services.Implements
 {
-    public class DeepDiagnosisService: IDeepDiagnosisService
+    public class DeepDiagnosisService : IDeepDiagnosisService
     {
-        // 声明 C++ DLL 接口
-        [DllImport("HighPerformanceComputing.dll", CallingConvention = CallingConvention.Cdecl)]
+        // 确保此处名称与 C++ 项目输出的 DLL 文件名完全一致
+        private const string DllName = "HighPerformanceComputing.dll";
+
+        // 1. 新增 FFTW 预初始化接口（必须调用一次，否则实时渲染必卡）
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void InitFFTW();
+
+        // 2. 更新签名：增加 out_capacity 防止 C++ 端缓冲区溢出
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
         private static extern void ComputeOrderTracking(
             IntPtr in_data,
             int in_len,
@@ -19,45 +22,123 @@ namespace BearingFaultDiagnosis.Services.Implements
             double rpm,
             int target_spr,
             IntPtr out_data,
-            out int out_len
+            out int out_len,
+            int out_capacity // 新增安全参数
         );
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void ComputeSpectrum(
+            IntPtr in_data,
+            int in_len,
+            IntPtr out_mag
+        );
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void InitCWT(int signal_len, int num_scales, int num_time_bins);
+
+        [DllImport(DllName, EntryPoint = "ComputeCWT", CallingConvention = CallingConvention.Cdecl)]
+        private static extern void ComputeCWTNative(
+            IntPtr signal,
+            int signal_len,
+            double fs,
+            double freq_low,
+            double freq_high,
+            IntPtr out_matrix,
+            int num_scales,
+            int num_time_bins
+        );
+
+        // 静态构造函数：DLL 加载后自动执行一次，缓存 FFTW Plan
+        static DeepDiagnosisService()
+        {
+            try
+            {
+                InitFFTW();
+                InitCWT(32768, 128, 512);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("FFTW 初始化失败，请检查 DLL 路径或 libfftw3 依赖", ex);
+            }
+        }
+
         public double[] ProcessChunk(double[] rawData, double fs, double rpm, int targetSpr)
         {
-            int inLen = rawData.Length;
-            // 估算输出最大长度：最高转速下的点数，分配一个足够大的缓冲区
-            // 比如假设最高 3000 RPM (50Hz)，0.512秒最多转 25.6 圈，400点/圈，大约 10240 点。
-            double maxDuration = inLen / fs;
-            int maxPossiblePoints = (int)((3000.0 / 60.0) * maxDuration * targetSpr) + 1000;
+            if (rawData == null || rawData.Length == 0 || rpm <= 1e-5)
+                return Array.Empty<double>();
 
-            double[] outDataBuffer = new double[maxPossiblePoints];
+            int inLen = rawData.Length;
+
+            // 动态计算实际需要的点数，替代硬编码 3000 RPM 的不安全估算
+            double duration = inLen / fs;
+            int estimatedPoints = (int)((rpm / 60.0) * duration * targetSpr) + 10;
+
+            // 分配安全缓冲区（至少不小于输入长度，防极端工况溢出）
+            int capacity = Math.Max(estimatedPoints, inLen);
+            double[] outDataBuffer = new double[capacity];
             int actualOutLen = 0;
 
-            // 使用 fixed 锁定内存，实现零拷贝传递
             unsafe
             {
                 fixed (double* pIn = rawData)
                 fixed (double* pOut = outDataBuffer)
                 {
                     ComputeOrderTracking(
-                        (IntPtr)pIn,
-                        inLen,
-                        fs,
-                        rpm,
-                        targetSpr,
-                        (IntPtr)pOut,
-                        out actualOutLen
+                        (IntPtr)pIn, inLen, fs, rpm, targetSpr,
+                        (IntPtr)pOut, out actualOutLen, capacity
                     );
                 }
             }
 
-            // 截取实际有效长度返回 (这里会发生一次极小的内存拷贝)
-            // 也可以直接返回 Span<double> 彻底零拷贝
-            double[] finalResult = new double[actualOutLen];
-            Array.Copy(outDataBuffer, finalResult, actualOutLen);
+            if (actualOutLen <= 0) return Array.Empty<double>();
 
-            return finalResult;
+            // 截取有效数据（此处拷贝极小，兼容现有 ConcurrentQueue<double[]> 架构）
+            double[] result = new double[actualOutLen];
+            Array.Copy(outDataBuffer, result, actualOutLen);
+            return result;
         }
 
-    }
+        public double[] ComputeSpectrum(double[] inData)
+        {
+            if (inData == null || inData.Length == 0) return Array.Empty<double>();
 
+            int inLen = inData.Length;
+            // 修正：单边谱应包含 DC 和 Nyquist 点，长度为 N/2 + 1
+            int outLen = (inLen / 2) + 1;
+            double[] outMag = new double[outLen];
+
+            unsafe
+            {
+                fixed (double* pIn = inData)
+                fixed (double* pOut = outMag)
+                {
+                    ComputeSpectrum((IntPtr)pIn, inLen, (IntPtr)pOut);
+                }
+            }
+
+            return outMag;
+        }
+
+        public double[] ComputeCWT(double[] rawData, double fs, double freqLow, double freqHigh,
+                                    int numScales, int numTimeBins)
+        {
+            if (rawData == null || rawData.Length == 0)
+                return Array.Empty<double>();
+
+            double[] result = new double[numScales * numTimeBins];
+
+            unsafe
+            {
+                fixed (double* pIn = rawData)
+                fixed (double* pOut = result)
+                {
+                    ComputeCWTNative(
+                        (IntPtr)pIn, rawData.Length, fs, freqLow, freqHigh,
+                        (IntPtr)pOut, numScales, numTimeBins);
+                }
+            }
+
+            return result;
+        }
+    }
 }

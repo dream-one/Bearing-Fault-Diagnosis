@@ -38,8 +38,9 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.14" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.25.0" />
     <PackageReference Include="NWaves" Version="0.9.6" />
-    <PackageReference Include="ScottPlot.WPF" Version="5.1.57" />
+    <PackageReference Include="ScottPlot.WPF" Version="5.1.58" />
   </ItemGroup>
 
   <ItemGroup>
@@ -56,7 +57,22 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\HighPerformanceComputing\HighPerformanceComputing.vcxproj" />
+    <ProjectReference Include="HighPerformanceComputing\HighPerformanceComputing.vcxproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="DLModels\best_I_s2024.onnx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="DLModels\best_J_s2024.onnx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="DLModels\best_K_s2024.onnx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="DLModels\best_L_s2024.onnx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

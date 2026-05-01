@@ -18,7 +18,7 @@
             <TextBlock Text="深度诊断分析台" FontSize="22" FontWeight="Bold" Foreground="#333333" VerticalAlignment="Center"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <Button Content="导出诊断报告" Padding="15,8" Margin="0,0,10,0" Background="#E0E5EC" BorderThickness="0"/>
-                <Button Content="▶ 执行双分支联合诊断" Padding="15,8" Background="#00B894" Foreground="White" BorderThickness="0"/>
+                <Button Command="{Binding ExecuteDualBranchDiagnosisCommand}" Content="▶ 执行双分支联合诊断" Padding="15,8" Background="#00B894" Foreground="White" BorderThickness="0"/>
             </StackPanel>
         </Grid>
 
@@ -60,8 +60,12 @@
                         <DropShadowEffect Color="#DDDDDD" BlurRadius="5" ShadowDepth="1" Opacity="0.5"/>
                     </Border.Effect>
                     <Grid>
-                        <TextBlock Text="变工况阶次谱 (Order Spectrum)" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Top"/>
-                        <TextBlock Text="[ 阶次谱图表占位：高亮显示特征阶次峰值 ]" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#B2BEC3"/>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="1*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="变工况阶次谱 (Order Spectrum)" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Top"/>
+                        <ScottPlot:WpfPlot Grid.Row="1" x:Name="OrderPlot" Margin="0,5,0,0" />
                     </Grid>
                 </Border>
 
@@ -70,8 +74,12 @@
                         <DropShadowEffect Color="#DDDDDD" BlurRadius="5" ShadowDepth="1" Opacity="0.5"/>
                     </Border.Effect>
                     <Grid>
-                        <TextBlock Text="包络谱解调分析 (Envelope Spectrum)" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Top"/>
-                        <TextBlock Text="[ 包络谱图表占位：展示解调后的故障频率 ]" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#B2BEC3"/>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="1*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="包络谱解调分析 (Envelope Spectrum)" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Top"/>
+                        <ScottPlot:WpfPlot Grid.Row="1" x:Name="EnvPlot" Margin="0,5,0,0" />
                     </Grid>
                 </Border>
             </Grid>
@@ -81,7 +89,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="1.5*"/>
                     <RowDefinition Height="1.5*"/>
-                    <RowDefinition Height="1*"/>
+                    <RowDefinition Height="1.5*"/>
                 </Grid.RowDefinitions>
 
                 <TextBlock Text="■ 域泛化网络分支 (AI驱动诊断)" FontSize="16" FontWeight="SemiBold" Foreground="#2D3436" Margin="5,0,0,10"/>
@@ -91,8 +99,24 @@
                         <DropShadowEffect Color="#DDDDDD" BlurRadius="5" ShadowDepth="1" Opacity="0.5"/>
                     </Border.Effect>
                     <Grid>
-                        <TextBlock Text="CWT 连续小波时频热力图" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Top"/>
-                        <TextBlock Text="[ 时频热力图占位：展示能量随频带和转速的变化 ]" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#B2BEC3"/>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="18"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="CWT 连续小波时频热力图" FontSize="14" FontWeight="Bold" Foreground="#636E72" Margin="0,0,0,5"/>
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="36"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0">
+                                <TextBlock Text="16k" FontSize="10" Foreground="#999" VerticalAlignment="Top" HorizontalAlignment="Center"/>
+                                <TextBlock Text="0" FontSize="10" Foreground="#999" VerticalAlignment="Bottom" HorizontalAlignment="Center"/>
+                            </Grid>
+                            <Image Grid.Column="1" x:Name="CwtHeatmapImage" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                        </Grid>
+                        <TextBlock Grid.Row="2" Text="时间 (s)" FontSize="10" Foreground="#999" HorizontalAlignment="Center"/>
                     </Grid>
                 </Border>
 
@@ -112,19 +136,13 @@
                     </Border.Effect>
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1*"/>
                             <ColumnDefinition Width="1.5*"/>
                         </Grid.ColumnDefinitions>
 
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Center">
-                            <TextBlock Text="综合诊断结论" FontSize="14" Foreground="#636E72" HorizontalAlignment="Center"/>
-                            <TextBlock Text="外圈早期损伤" FontSize="24" FontWeight="Bold" Foreground="#D63031" Margin="0,10,0,0" HorizontalAlignment="Center"/>
-                            <TextBlock Text="建议增强润滑并持续关注" FontSize="12" Foreground="#D63031" Margin="0,5,0,0" HorizontalAlignment="Center"/>
-                        </StackPanel>
 
                         <Grid Grid.Column="1" Margin="10,0,0,0">
                             <TextBlock Text="双分支网络预测概率" FontSize="12" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Top"/>
-                            <TextBlock Text="[ 条形图占位：显示各故障类型的 Softmax 概率 ]" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#B2BEC3"/>
+                            <ScottPlot:WpfPlot Name="SoftMaxProbabiltyBar" />
                         </Grid>
                     </Grid>
                 </Border>

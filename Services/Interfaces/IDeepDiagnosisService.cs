@@ -13,5 +13,16 @@ namespace BearingFaultDiagnosis.Services.Interfaces
         /// <param name="targetSpr">目标转速</param>
         /// <returns>处理后的数据</returns>
         double[] ProcessChunk(double[] rawData, double fs, double rpm, int targetSpr);
+
+        /// <summary>
+        /// 计算频谱幅度
+        /// </summary>
+        double[] ComputeSpectrum(double[] inData);
+
+        /// <summary>
+        /// 计算 CWT 时频矩阵（行=频率尺度，列=时间）
+        /// </summary>
+        double[] ComputeCWT(double[] rawData, double fs, double freqLow, double freqHigh,
+                            int numScales, int numTimeBins);
     }
 }
