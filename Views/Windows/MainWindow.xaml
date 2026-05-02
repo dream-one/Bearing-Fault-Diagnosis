@@ -1,4 +1,4 @@
-﻿<Window x:Class="BearingFaultDiagnosis.MainWindow"
+<Window x:Class="BearingFaultDiagnosis.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -7,11 +7,52 @@
         xmlns:vm="clr-namespace:BearingFaultDiagnosis.ViewModels"
         xmlns:views="clr-namespace:BearingFaultDiagnosis.Views.Pages"
         mc:Ignorable="d"
-        
+
         Title="轴承故障诊断系统" Height="1080" Width="1920"
       Background="#F1F5F9">
 
     <Window.Resources>
+        <local:BoolToGridLengthConverter x:Key="BoolToGridLengthConverter"/>
+        <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+
+        <!-- Title bar button styles -->
+        <Style x:Key="TitleBarButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="18,0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="#475569"/>
+            <Setter Property="Background" Value="#F1F5F9"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+
+        <Style x:Key="TitleBarPrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource TitleBarButtonStyle}">
+            <Setter Property="Background" Value="#0F172A"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <Style x:Key="TitleBarToggleButtonStyle" TargetType="ToggleButton">
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="18,0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="#475569"/>
+            <Setter Property="Background" Value="#F1F5F9"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Background" Value="#3B82F6"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="Content" Value="保存中..."/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
             <views:DashboardView />
         </DataTemplate>
@@ -19,7 +60,23 @@
             <views:DeepDiagnosisView />
         </DataTemplate>
 
-        <!-- 新增：页面切换动画样式 -->
+        <!-- Page toolbar buttons (shown in unified title bar) -->
+        <DataTemplate x:Key="DashboardToolbar" DataType="{x:Type vm:DashboardViewModel}">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="读取数据" Command="{Binding ReadDataCommand}" Style="{StaticResource TitleBarButtonStyle}"/>
+                <ToggleButton Content="数据落盘" Command="{Binding ToggleSaveCommand}" Style="{StaticResource TitleBarToggleButtonStyle}"/>
+                <Button Content="停止" Command="{Binding StopServerCommand}" Style="{StaticResource TitleBarButtonStyle}"/>
+                <Button Content="开始监听" Command="{Binding StartServerCommand}" Style="{StaticResource TitleBarPrimaryButtonStyle}"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="DeepDiagnosisToolbar" DataType="{x:Type vm:DeepDiagnosisViewModel}">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="执行AI诊断" Command="{Binding ExecuteDualBranchDiagnosisCommand}" Style="{StaticResource TitleBarPrimaryButtonStyle}"/>
+                <Button Content="导出诊断报告" Style="{StaticResource TitleBarButtonStyle}"/>
+            </StackPanel>
+        </DataTemplate>
+
         <Style x:Key="PageTransitionStyle" TargetType="ContentControl">
             <Setter Property="Opacity" Value="1"/>
             <Style.Triggers>
@@ -27,7 +84,7 @@
                     <BeginStoryboard>
                         <Storyboard>
                             <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                             From="0" To="1" 
+                                             From="0" To="1"
                                              Duration="0:0:0.3"/>
                         </Storyboard>
                     </BeginStoryboard>
@@ -38,24 +95,29 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="240"/>
+            <ColumnDefinition Width="{Binding IsSidebarCollapsed, Converter={StaticResource BoolToGridLengthConverter}}"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Column="0" Background="#0F172A" Width="240">
+        <!-- Sidebar -->
+        <Border Grid.Column="0" Background="#0F172A">
             <DockPanel>
-                <!-- 顶部 Logo 与 标题区域 -->
-                <StackPanel DockPanel.Dock="Top" Margin="24,32,24,32">
-                    <Grid Width="40" Height="40" HorizontalAlignment="Left" Margin="0,0,0,12">
+                <!-- Logo Area -->
+                <StackPanel DockPanel.Dock="Top" Margin="0,24,0,32">
+                    <Grid Width="40" Height="40" HorizontalAlignment="Left" Margin="16,0,0,12">
                         <Border Background="#38BDF8" CornerRadius="8" Opacity="0.2"/>
                         <TextBlock Text="⚙" Foreground="#38BDF8" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="24"/>
                     </Grid>
-                    <TextBlock Text="BearingDiag" Foreground="White" FontSize="22" FontWeight="Bold"/>
-                    <TextBlock Text="Fault Diagnosis System" Foreground="#94A3B8" FontSize="12" Margin="0,4,0,0"/>
+                    <StackPanel Margin="16,0,0,0"
+                                Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                        <TextBlock Text="BearingDiag" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                        <TextBlock Text="Fault Diagnosis System" Foreground="#94A3B8" FontSize="12" Margin="0,4,0,0"/>
+                    </StackPanel>
                 </StackPanel>
 
-                <!-- 底部 用户信息区域 (可选) -->
-                <Border DockPanel.Dock="Bottom" Margin="12,24,12,24" Padding="12" Background="#1E293B" CornerRadius="8">
+                <!-- User Info - Expanded -->
+                <Border DockPanel.Dock="Bottom" Margin="12" Padding="12" Background="#1E293B" CornerRadius="8"
+                        Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                     <StackPanel Orientation="Horizontal">
                         <Border Width="32" Height="32" CornerRadius="16" Background="#38BDF8">
                             <TextBlock Text="U" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold"/>
@@ -67,7 +129,15 @@
                     </StackPanel>
                 </Border>
 
-                <!-- 导航菜单区域 -->
+                <!-- User Info - Collapsed -->
+                <Border DockPanel.Dock="Bottom" Width="40" Height="40" Margin="0,0,0,8" Padding="0" Background="#1E293B" CornerRadius="8" HorizontalAlignment="Center"
+                        Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Border Width="32" Height="32" CornerRadius="16" Background="#38BDF8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="U" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold"/>
+                    </Border>
+                </Border>
+
+                <!-- Navigation Menu -->
                 <ListBox ItemsSource="{Binding NavigationItems}"
                          SelectedItem="{Binding SelectedNavItem}"
                          Background="Transparent"
@@ -80,18 +150,14 @@
                             <Setter Property="Template">
                                 <Setter.Value>
                                     <ControlTemplate TargetType="ListBoxItem">
-                                        <!-- 增加圆角 Margin 和 Padding，实现悬浮卡片感 -->
-                                        <Border x:Name="BgBorder" Background="Transparent" CornerRadius="8" Margin="12,4">
+                                        <Border x:Name="BgBorder" Background="Transparent" CornerRadius="8" Margin="8,4">
                                             <Grid x:Name="NavGrid" Cursor="Hand" Height="44">
-                                                <!-- 圆角指示条 -->
-                                                <Border x:Name="ActiveIndicator" 
-                                                        HorizontalAlignment="Left" 
-                                                        Width="4" Height="20" 
+                                                <Border x:Name="ActiveIndicator"
+                                                        HorizontalAlignment="Left"
+                                                        Width="4" Height="20"
                                                         CornerRadius="2"
-                                                        Background="#38BDF8" 
+                                                        Background="#38BDF8"
                                                         Visibility="Collapsed"/>
-
-                                                <!-- 调整内容边距以适应新的布局 -->
                                                 <ContentPresenter Margin="16,0" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
@@ -124,9 +190,10 @@
                                     <ColumnDefinition Width="32"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <!-- 图标占位，如果你在 ViewModel 增加了 Icon 属性，可以绑定到 Text="{Binding Icon}" -->
-                                <TextBlock Grid.Column="0" Text="❖" FontSize="16" Margin="0,0,0,0" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="15" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="0" Text="❖" FontSize="16" VerticalAlignment="Center"
+                                           ToolTip="{Binding Name}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="15" VerticalAlignment="Center"
+                                           Visibility="{Binding DataContext.IsSidebarCollapsed, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -134,10 +201,71 @@
             </DockPanel>
         </Border>
 
-        <Grid Grid.Column="1" Margin="0">
-            <ContentControl Grid.Column="1" 
-                        Content="{Binding CurrentViewModel}" 
-                        Style="{StaticResource PageTransitionStyle}"/>
+        <!-- Main Content Area -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="60"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Unified Title Bar -->
+            <Border Grid.Row="0" Background="White" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+                <Grid Margin="16,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0"
+                            Command="{Binding ToggleSidebarCommand}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            FontSize="18"
+                            Foreground="#64748B"
+                            Padding="8,0"
+                            Cursor="Hand"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="☰" />
+                    </Button>
+
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding CurrentPageTitle}"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="#1E293B"
+                               VerticalAlignment="Center"
+                               Margin="16,0,0,0"/>
+
+                    <!-- Page-specific toolbar buttons -->
+                    <ContentControl Grid.Column="3" VerticalAlignment="Center">
+                        <ContentControl.Style>
+                            <Style TargetType="ContentControl">
+                                <Setter Property="Content" Value="{Binding CurrentViewModel}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CurrentViewModel}" Value="{x:Null}">
+                                        <Setter Property="Content" Value="{x:Null}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ContentControl.Style>
+                        <ContentControl.Resources>
+                            <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
+                                <ContentControl Content="{Binding .}" ContentTemplate="{StaticResource DashboardToolbar}"/>
+                            </DataTemplate>
+                            <DataTemplate DataType="{x:Type vm:DeepDiagnosisViewModel}">
+                                <ContentControl Content="{Binding .}" ContentTemplate="{StaticResource DeepDiagnosisToolbar}"/>
+                            </DataTemplate>
+                        </ContentControl.Resources>
+                    </ContentControl>
+                </Grid>
+            </Border>
+
+            <!-- Page Content -->
+            <ContentControl Grid.Row="1"
+                            Content="{Binding CurrentViewModel}"
+                            Style="{StaticResource PageTransitionStyle}"/>
         </Grid>
     </Grid>
 </Window>

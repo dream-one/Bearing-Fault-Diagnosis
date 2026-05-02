@@ -1,25 +1,25 @@
-﻿<UserControl x:Class="BearingFaultDiagnosis.Views.Pages.DashboardView"
+<UserControl x:Class="BearingFaultDiagnosis.Views.Pages.DashboardView"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                      xmlns:scottplot="http://schemas.scottplot.net/2008/xaml/presentation"
 
-      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:local="clr-namespace:BearingFaultDiagnosis.Views.Pages"
         xmlns:collections="clr-namespace:BearingFaultDiagnosis.Models"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
-      
-      mc:Ignorable="d" 
+
+      mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       >
     <UserControl.Resources>
         <Style x:Key="CardStyle" TargetType="Border">
             <Setter Property="Background" Value="White"/>
-            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="CornerRadius" Value="10"/>
             <Setter Property="Padding" Value="16"/>
             <Setter Property="Effect">
                 <Setter.Value>
-                    <DropShadowEffect Color="#cbd5e1" BlurRadius="10" ShadowDepth="2" Opacity="0.5"/>
+                    <DropShadowEffect Color="#e2e8f0" BlurRadius="8" ShadowDepth="1" Opacity="0.4"/>
                 </Setter.Value>
             </Setter>
         </Style>
@@ -30,63 +30,40 @@
             <Setter Property="Margin" Value="0,2"/>
         </Style>
 
+        <Style x:Key="ToolButtonStyle" TargetType="Control">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="#475569"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#e2e8f0" BlurRadius="4" ShadowDepth="1" Opacity="0.3"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButtonStyle" TargetType="Control" BasedOn="{StaticResource ToolButtonStyle}">
+            <Setter Property="Background" Value="#0F172A"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
     </UserControl.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="80"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0">
-            <TextBlock Text="实时监控看板" FontSize="24" FontWeight="Bold" Foreground="#1E293B" VerticalAlignment="Center"/>
+        <!-- Toolbar -->
+        <Border Grid.Row="0" Background="Transparent" Margin="0,0,0,16">
+          
+        </Border>
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Button Command="{Binding ReadDataCommand}" Content="📂 读取数据" 
-                       Width="140" Height="42" Margin="0,0,12,0"
-                       Background="#8B5CF6" Foreground="White" BorderThickness="0" 
-                       FontSize="15" FontWeight="Bold">
-                    <Button.Resources>
-                        <Style TargetType="Border">
-                            <Setter Property="CornerRadius" Value="6"/>
-                        </Style>
-                    </Button.Resources>
-                </Button>
-
-                <ToggleButton Command="{Binding ToggleSaveCommand}" Content="💾 数据落盘保存" 
-                             Width="140" Height="42" Margin="0,0,20,0" 
-                             Background="#E2E8F0" Foreground="#334155" FontSize="14" FontWeight="SemiBold">
-                    <ToggleButton.Style>
-                        <Style TargetType="ToggleButton">
-                            <Style.Triggers>
-                                <Trigger Property="IsChecked" Value="True">
-                                    <Setter Property="Background" Value="#3B82F6"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                    <Setter Property="Content" Value="💾 正在保存数据..."/>
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
-                    </ToggleButton.Style>
-                </ToggleButton>
-
-                <Button Command="{Binding StopServerCommand}" Content="⏹ 停止监听" 
-                       Width="120" Height="42" Margin="0,0,12,0"
-                       Background="#FEE2E2" Foreground="#EF4444" BorderThickness="0" 
-                       FontSize="15" FontWeight="Bold"/>
-
-                <Button Command="{Binding StartServerCommand}" Content="▶ 开始监听" 
-                       Width="120" Height="42" 
-                       Background="#10B981" Foreground="White" BorderThickness="0" 
-                       FontSize="15" FontWeight="Bold">
-                    <Button.Resources>
-                        <Style TargetType="Border">
-                            <Setter Property="CornerRadius" Value="6"/>
-                        </Style>
-                    </Button.Resources>
-                </Button>
-            </StackPanel>
-        </Grid>
-
-        <Grid Grid.Row="1" Margin="0,10,0,0">
+        <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="7*"/>
                 <ColumnDefinition Width="3*"/>
@@ -98,65 +75,68 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <UniformGrid Grid.Row="0" Columns="5" Height="120">
-                    <Border Style="{StaticResource CardStyle}" Margin="0,0,16,0" BorderBrush="#3B82F6" BorderThickness="0,4,0,0">
+                <!-- Sensor Cards -->
+                <UniformGrid Grid.Row="0" Columns="5" Height="90" Margin="10,0,0,16">
+                    <Border Style="{StaticResource CardStyle}" Margin="0,0,12,0">
                         <StackPanel>
-                            <TextBlock Text="设备温度" Foreground="#64748B" FontSize="14"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <TextBlock Text="{Binding CurrentSensorData.Temperature, StringFormat={}{0:F1}, FallbackValue=25.4}" FontSize="36" FontWeight="Bold" Foreground="#0F172A"/>
-                                <TextBlock Text=" ℃" FontSize="16" Foreground="#94A3B8" VerticalAlignment="Bottom" Margin="0,0,0,6"/>
+                            <TextBlock Text="设备温度" Foreground="#94A3B8" FontSize="12"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <TextBlock Text="{Binding CurrentSensorData.Temperature, StringFormat={}{0:F1}, FallbackValue=25.4}" FontSize="28" FontWeight="SemiBold" Foreground="#0F172A"/>
+                                <TextBlock Text="℃" FontSize="13" Foreground="#94A3B8" VerticalAlignment="Bottom" Margin="2,0,0,3"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
-                    <Border Style="{StaticResource CardStyle}" Margin="0,0,16,0" BorderBrush="#10B981" BorderThickness="0,4,0,0">
+                    <Border Style="{StaticResource CardStyle}" Margin="0,0,12,0">
                         <StackPanel>
-                            <TextBlock Text="运行电流" Foreground="#64748B" FontSize="14"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <TextBlock Text="{Binding CurrentSensorData.Current, StringFormat={}{0:F2}, FallbackValue=5.20}" FontSize="36" FontWeight="Bold" Foreground="#0F172A"/>
-                                <TextBlock Text=" A" FontSize="16" Foreground="#94A3B8" VerticalAlignment="Bottom" Margin="0,0,0,6"/>
+                            <TextBlock Text="运行电流" Foreground="#94A3B8" FontSize="12"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <TextBlock Text="{Binding CurrentSensorData.Current, StringFormat={}{0:F2}, FallbackValue=5.20}" FontSize="28" FontWeight="SemiBold" Foreground="#0F172A"/>
+                                <TextBlock Text="A" FontSize="13" Foreground="#94A3B8" VerticalAlignment="Bottom" Margin="2,0,0,3"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
-                    <Border Style="{StaticResource CardStyle}" Margin="0,0,16,0" BorderBrush="#F59E0B" BorderThickness="0,4,0,0">
+                    <Border Style="{StaticResource CardStyle}" Margin="0,0,12,0">
                         <StackPanel>
-                            <TextBlock Text="环境湿度" Foreground="#64748B" FontSize="14"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <TextBlock Text="{Binding CurrentSensorData.Humidity, StringFormat={}{0:F1}, FallbackValue=45.0}" FontSize="36" FontWeight="Bold" Foreground="#0F172A"/>
-                                <TextBlock Text=" %" FontSize="16" Foreground="#94A3B8" VerticalAlignment="Bottom" Margin="0,0,0,6"/>
+                            <TextBlock Text="环境湿度" Foreground="#94A3B8" FontSize="12"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <TextBlock Text="{Binding CurrentSensorData.Humidity, StringFormat={}{0:F1}, FallbackValue=45.0}" FontSize="28" FontWeight="SemiBold" Foreground="#0F172A"/>
+                                <TextBlock Text="%" FontSize="13" Foreground="#94A3B8" VerticalAlignment="Bottom" Margin="2,0,0,3"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
-                    <Border Style="{StaticResource CardStyle}" Margin="0,0,16,0" BorderBrush="#8B5CF6" BorderThickness="0,4,0,0">
+                    <Border Style="{StaticResource CardStyle}" Margin="0,0,12,0">
                         <StackPanel>
-                            <TextBlock Text="横滚角 (Roll)" Foreground="#64748B" FontSize="14"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <TextBlock Text="{Binding CurrentSensorData.Roll, StringFormat={}{0:F2}, FallbackValue=1.05}" FontSize="36" FontWeight="Bold" Foreground="#0F172A"/>
-                                <TextBlock Text=" °" FontSize="16" Foreground="#94A3B8" VerticalAlignment="Bottom" Margin="0,0,0,6"/>
+                            <TextBlock Text="横滚角" Foreground="#94A3B8" FontSize="12"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <TextBlock Text="{Binding CurrentSensorData.Roll, StringFormat={}{0:F2}, FallbackValue=1.05}" FontSize="28" FontWeight="SemiBold" Foreground="#0F172A"/>
+                                <TextBlock Text="°" FontSize="13" Foreground="#94A3B8" VerticalAlignment="Bottom" Margin="2,0,0,3"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
-                    <Border Style="{StaticResource CardStyle}" BorderBrush="#EC4899" BorderThickness="0,4,0,0">
+                    <Border Style="{StaticResource CardStyle}">
                         <StackPanel>
-                            <TextBlock Text="俯仰角 (Pitch)" Foreground="#64748B" FontSize="14"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <TextBlock Text="{Binding CurrentSensorData.Pitch, StringFormat={}{0:F2}, FallbackValue=-0.32}" FontSize="36" FontWeight="Bold" Foreground="#0F172A"/>
-                                <TextBlock Text=" °" FontSize="16" Foreground="#94A3B8" VerticalAlignment="Bottom" Margin="0,0,0,6"/>
+                            <TextBlock Text="俯仰角" Foreground="#94A3B8" FontSize="12"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <TextBlock Text="{Binding CurrentSensorData.Pitch, StringFormat={}{0:F2}, FallbackValue=-0.32}" FontSize="28" FontWeight="SemiBold" Foreground="#0F172A"/>
+                                <TextBlock Text="°" FontSize="13" Foreground="#94A3B8" VerticalAlignment="Bottom" Margin="2,0,0,3"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
                 </UniformGrid>
 
-                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,20,0,0">
+                <!-- Chart -->
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="0" Margin="10,0,0,0">
                     <Grid>
                         <scottplot:WpfPlot Name="WpfPlot1" Grid.Row="1" Margin="10"/>
                     </Grid>
                 </Border>
             </Grid>
 
+            <!-- Log Panel -->
             <Border Grid.Column="1" Style="{StaticResource CardStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -165,8 +145,8 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Text="系统实时日志" FontSize="16" FontWeight="Bold" Foreground="#1E293B" Margin="0,0,0,10"/>
-                    <Rectangle Grid.Row="1" Height="1" Fill="#E2E8F0" Margin="0,0,0,10"/>
+                    <TextBlock Grid.Row="0" Text="系统实时日志" FontSize="15" FontWeight="SemiBold" Foreground="#1E293B" Margin="0,0,0,8"/>
+                    <Rectangle Grid.Row="1" Height="1" Fill="#F1F5F9" Margin="0,0,0,8"/>
 
                     <ListBox Grid.Row="2" ItemsSource="{Binding DisplayList}"
                             x:Name="dataListLog"
@@ -181,7 +161,7 @@
                                 <Setter Property="IsHitTestVisible" Value="False"/>
                                 <Setter Property="Padding" Value="0,4"/>
                                 <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                                <Setter Property="BorderBrush" Value="#F1F5F9"/>
+                                <Setter Property="BorderBrush" Value="#F8FAFC"/>
                             </Style>
                         </ListBox.ItemContainerStyle>
 

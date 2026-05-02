@@ -279,7 +279,7 @@ namespace BearingFaultDiagnosis.ViewModels
 
             BarPlot.Clear();
 
-            // ========== 1. 归一化到 [0,1] ==========
+            // ========== 归一化到 [0,1] ==========
             float min = values.Min();
             float max = values.Max();
             float range = max - min;
@@ -289,10 +289,6 @@ namespace BearingFaultDiagnosis.ViewModels
             else
                 valuesD = values.Select(v => (double)((v - min) / range)).ToArray();
 
-            // ========== 2. 绘制柱状图（柱子变窄的两种方案） ==========
-            // 方案A：如果你的 ScottPlot 支持 width 参数（绝大多数版本支持，先试这个）
-            //var barPlotObj = BarPlot.Add.Bars(positions, valuesD, width: 0.5);
-
             // 如果 width 参数报错，请换成方案B（增大positions间距），并同时替换底部刻度坐标：
             double[] spacedPositions = new double[positions.Length];
             for (int i = 0; i < positions.Length; i++)
@@ -300,7 +296,6 @@ namespace BearingFaultDiagnosis.ViewModels
             positions = spacedPositions;               // 后续都用这个新 positions
             var barPlotObj = BarPlot.Add.Bars(positions, valuesD); // 无 width 参数
 
-            // ========== 3. 柱子颜色 ==========
             ScottPlot.Color[] colors =
             {
         ScottPlot.Color.FromHex("#4E79A7"),
@@ -329,7 +324,7 @@ namespace BearingFaultDiagnosis.ViewModels
                 txt.LabelStyle.Alignment = Alignment.LowerCenter;   // 保证在点上方居中
             }
 
-            // ========== 5. 底部分类标签 ==========
+            // ========== 底部分类标签 ==========
             ScottPlot.Tick[] ticks = positions
                 .Zip(labels, (pos, lbl) => new ScottPlot.Tick(pos, lbl))
                 .ToArray();
@@ -339,7 +334,7 @@ namespace BearingFaultDiagnosis.ViewModels
             BarPlot.Axes.Bottom.TickLabelStyle.FontSize = 14;
 
             // ========== 6. Y 轴设置 ==========
-            BarPlot.YLabel("置信度（归一化）");
+            BarPlot.YLabel("置信度");
             BarPlot.Axes.Left.Label.FontName = "微软雅黑";
             BarPlot.Axes.Left.Label.FontSize = 18;
             BarPlot.Axes.Left.TickLabelStyle.FontName = "微软雅黑";

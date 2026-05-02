@@ -26,7 +26,11 @@ namespace BearingFaultDiagnosis.ViewModels
         [ObservableProperty]
         private Menu _selectedNavItem;
 
-       
+        [ObservableProperty]
+        private bool _isSidebarCollapsed;
+
+        [ObservableProperty]
+        private string _currentPageTitle = "实时监控看板";
 
         public ObservableCollection<Menu> NavigationItems { get; set; } = new();
         public MainViewModel(DashboardViewModel viewModel, AppSession appSession, IUserService userService)
@@ -53,7 +57,13 @@ namespace BearingFaultDiagnosis.ViewModels
             if (value != null)
             {
                 NavigateByRoute(value.Route);
+                CurrentPageTitle = value.Name;
             }
+        }
+        [RelayCommand]
+        private void ToggleSidebar()
+        {
+            IsSidebarCollapsed = !IsSidebarCollapsed;
         }
         [RelayCommand]
         private void NavigateByRoute(string route)
