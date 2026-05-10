@@ -12,8 +12,20 @@ namespace BearingFaultDiagnosis.Services.Implements
         public ConcurrentQueue<double> BufferV1_X { get; } = new();
         public ConcurrentQueue<double> BufferV1_Y { get; } = new();
         public ConcurrentQueue<double> BufferV1_Z { get; } = new();
-        public bool IsProcessing { get; private set; } = false;
-        public PuMetadata puMetadata { get; set; }
+        public bool IsProcessing { get; private set; } = true;
+
+        public event Action<PuMetadata>? MetadataUpdated;
+
+        private PuMetadata _puMetadata;
+        public PuMetadata puMetadata
+        {
+            get => _puMetadata;
+            set
+            {
+                _puMetadata = value;
+                MetadataUpdated?.Invoke(value);
+            }
+        }
         public SensorDataService(ITCPServerService tcpService)
         {
             _tcpService = tcpService;
@@ -23,22 +35,28 @@ namespace BearingFaultDiagnosis.Services.Implements
         /// </summary>
         public void HandleVibrationDataForChart()
         {
+            IsProcessing = true;
             Task.Run(async () =>
             {
-                // WaitToReadAsync() 是灵魂：有数据它就瞬间唤醒，没数据它就安静等待，彻底干掉 Timer！
-                while (await _tcpService.ChartReader.WaitToReadAsync())
+                try
                 {
-                    while (_tcpService.ChartReader.TryRead(out var frame))
+                    while (await _tcpService.ChartReader.WaitToReadAsync() && IsProcessing)
                     {
-                        UpdatePoint(frame.V1_X, frame.V1_Y, frame.V1_Z);
-                        UpdatePoint(frame.V2_X, frame.V2_Y, frame.V2_Z);
-                        UpdatePoint(frame.V3_X, frame.V3_Y, frame.V3_Z);
-                        UpdatePoint(frame.V4_X, frame.V4_Y, frame.V4_Z);
-                        UpdatePoint(frame.V5_X, frame.V5_Y, frame.V5_Z);
+                        while (_tcpService.ChartReader.TryRead(out var frame) && IsProcessing)
+                        {
+                            UpdatePoint(frame.V1_X, frame.V1_Y, frame.V1_Z);
+                            UpdatePoint(frame.V2_X, frame.V2_Y, frame.V2_Z);
+                            UpdatePoint(frame.V3_X, frame.V3_Y, frame.V3_Z);
+                            UpdatePoint(frame.V4_X, frame.V4_Y, frame.V4_Z);
+                            UpdatePoint(frame.V5_X, frame.V5_Y, frame.V5_Z);
+                        }
                     }
                 }
-            }
-            );
+                finally
+                {
+                    IsProcessing = false;
+                }
+            });
         }
 
 
@@ -61,9 +79,10 @@ namespace BearingFaultDiagnosis.Services.Implements
 
         public async Task TestFlushAsync(double[] signData)
         {
-            int chunkSize = 1024;       // 每批推送 200 个点
-            int delayMs = 16;          // 每批之间等待 50 ms
-            for (int i = 0; i < signData.Length; i += chunkSize)
+            IsProcessing = true;
+            int chunkSize = 1024;       // 每批推送 1024 个点
+            int delayMs = 16;           // 每批之间等待 16 ms
+            for (int i = 0; i < signData.Length && IsProcessing; i += chunkSize)
             {
                 int end = Math.Min(i + chunkSize, signData.Length);
                 for (int j = i; j < end; j++)
@@ -73,8 +92,12 @@ namespace BearingFaultDiagnosis.Services.Implements
 
                 await Task.Delay(delayMs);
             }
+            IsProcessing = false;
         }
-
+        public void StopFileReading()
+        {
+            IsProcessing = false;
+        }
         private async Task<double[]> ReadBinAsync(string binPath)
         {
             return await Task.Run(async () =>

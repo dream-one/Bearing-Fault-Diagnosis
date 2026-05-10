@@ -39,6 +39,8 @@ namespace BearingFaultDiagnosis.Core
 
         public DbSet<DeviceCommandLog> DeviceCommandLogs => Set<DeviceCommandLog>();
 
+        public DbSet<BearingInfo> BearingInfos => Set<BearingInfo>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -88,6 +90,11 @@ namespace BearingFaultDiagnosis.Core
                 entity.HasOne(x => x.DeviceInfo)
                     .WithMany(x => x.CommandLogs)
                     .HasForeignKey(x => x.DeviceInfoId);
+            });
+
+            modelBuilder.Entity<BearingInfo>(entity =>
+            {
+                entity.HasIndex(x => new { x.Manufacturer, x.Model }).IsUnique();
             });
 
             var seedTime = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -161,6 +168,17 @@ namespace BearingFaultDiagnosis.Core
                     LastSeenAt = null,
                     Remark = "默认设备"
                 }
+            );
+
+            modelBuilder.Entity<BearingInfo>().HasData(
+                new BearingInfo { Id = 1, Manufacturer = "SKF", Model = "6205", RollerCount_n = 9, RollerDiameter_d = 7.94, PitchDiameter_D = 39.04, ContactAngle_alpha = 0, BPFO_Multiplier = 3.585, BPFI_Multiplier = 5.415, BSF_Multiplier = 2.311, FTF_Multiplier = 0.398 },
+                new BearingInfo { Id = 2, Manufacturer = "SKF", Model = "6206", RollerCount_n = 9, RollerDiameter_d = 9.53, PitchDiameter_D = 46.36, ContactAngle_alpha = 0, BPFO_Multiplier = 3.610, BPFI_Multiplier = 5.390, BSF_Multiplier = 2.319, FTF_Multiplier = 0.401 },
+                new BearingInfo { Id = 3, Manufacturer = "SKF", Model = "6305", RollerCount_n = 8, RollerDiameter_d = 10.32, PitchDiameter_D = 44.60, ContactAngle_alpha = 0, BPFO_Multiplier = 3.128, BPFI_Multiplier = 4.872, BSF_Multiplier = 2.109, FTF_Multiplier = 0.391 },
+                new BearingInfo { Id = 4, Manufacturer = "SKF", Model = "6311", RollerCount_n = 8, RollerDiameter_d = 14.29, PitchDiameter_D = 71.50, ContactAngle_alpha = 0, BPFO_Multiplier = 3.129, BPFI_Multiplier = 4.871, BSF_Multiplier = 2.133, FTF_Multiplier = 0.391 },
+                new BearingInfo { Id = 5, Manufacturer = "NSK", Model = "6205", RollerCount_n = 9, RollerDiameter_d = 7.94, PitchDiameter_D = 39.04, ContactAngle_alpha = 0, BPFO_Multiplier = 3.585, BPFI_Multiplier = 5.415, BSF_Multiplier = 2.311, FTF_Multiplier = 0.398 },
+                new BearingInfo { Id = 6, Manufacturer = "FAG", Model = "6205", RollerCount_n = 9, RollerDiameter_d = 7.94, PitchDiameter_D = 39.04, ContactAngle_alpha = 0, BPFO_Multiplier = 3.585, BPFI_Multiplier = 5.415, BSF_Multiplier = 2.311, FTF_Multiplier = 0.398 },
+                new BearingInfo { Id = 7, Manufacturer = "SKF", Model = "NU205", RollerCount_n = 13, RollerDiameter_d = 7.50, PitchDiameter_D = 38.50, ContactAngle_alpha = 0, BPFO_Multiplier = 5.810, BPFI_Multiplier = 7.190, BSF_Multiplier = 2.510, FTF_Multiplier = 0.447 },
+                new BearingInfo { Id = 8, Manufacturer = "SKF", Model = "7311B", RollerCount_n = 14, RollerDiameter_d = 12.00, PitchDiameter_D = 69.00, ContactAngle_alpha = 40, BPFO_Multiplier = 5.112, BPFI_Multiplier = 8.888, BSF_Multiplier = 2.278, FTF_Multiplier = 0.365 }
             );
         }
     }

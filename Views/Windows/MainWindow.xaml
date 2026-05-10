@@ -72,6 +72,24 @@
 
         <DataTemplate x:Key="DeepDiagnosisToolbar" DataType="{x:Type vm:DeepDiagnosisViewModel}">
             <StackPanel Orientation="Horizontal">
+                <TextBlock Text="轴承型号：" Foreground="#475569" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <ComboBox ItemsSource="{Binding BearingList}"
+                          SelectedItem="{Binding SelectedBearing}"
+                          DisplayMemberPath="DisplayName"
+                          Width="200"
+                          Height="36"
+                          FontSize="13"
+                          Margin="0,0,8,0"
+                          VerticalAlignment="Center"
+                          VerticalContentAlignment="Center"/>
+                <TextBox Text="{Binding Rpm, UpdateSourceTrigger=PropertyChanged}"
+                         Width="100"
+                         Height="36"
+                         FontSize="13"
+                         Margin="0,0,8,0"
+                         VerticalAlignment="Center"
+                         VerticalContentAlignment="Center"/>
+                <TextBlock Text="RPM" Foreground="#475569" FontSize="13" VerticalAlignment="Center" Margin="0,0,12,0"/>
                 <Button Content="执行AI诊断" Command="{Binding ExecuteDualBranchDiagnosisCommand}" Style="{StaticResource TitleBarPrimaryButtonStyle}"/>
                 <Button Content="导出诊断报告" Style="{StaticResource TitleBarButtonStyle}"/>
             </StackPanel>

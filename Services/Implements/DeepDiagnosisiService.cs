@@ -1,12 +1,26 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+using BearingFaultDiagnosis.Core;
+using BearingFaultDiagnosis.Entities;
+using BearingFaultDiagnosis.Models;
 using BearingFaultDiagnosis.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace BearingFaultDiagnosis.Services.Implements
 {
     public class DeepDiagnosisService : IDeepDiagnosisService
     {
-        // 确保此处名称与 C++ 项目输出的 DLL 文件名完全一致
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
+
+        public DeepDiagnosisService(IDbContextFactory<AppDbContext> dbContextFactory)
+        {
+            _dbContextFactory = dbContextFactory;
+        }
+
+         // 确保此处名称与 C++ 项目输出的 DLL 文件名完全一致
         private const string DllName = "HighPerformanceComputing.dll";
 
         // 1. 新增 FFTW 预初始化接口（必须调用一次，否则实时渲染必卡）
@@ -140,5 +154,55 @@ namespace BearingFaultDiagnosis.Services.Implements
 
             return result;
         }
+        public async Task<List<BearingInfo>> GetBearingListAsync()
+        {
+            using var context = await _dbContextFactory.CreateDbContextAsync();
+            return await context.BearingInfos.OrderBy(x => x.Manufacturer).ThenBy(x => x.Model).ToListAsync();
+        }
+
+        public BearingFaultResult CalculateFaultFrequencies(BearingInfo bearing, double rpm)
+        {
+            double shaftHz = rpm / 60.0;
+
+            // 优先使用数据库已存系数
+            if (bearing.BPFO_Multiplier.HasValue && bearing.BPFI_Multiplier.HasValue)
+            {
+                return new BearingFaultResult
+                {
+                    BPFO_Hz = bearing.BPFO_Multiplier.Value * shaftHz,
+                    BPFI_Hz = bearing.BPFI_Multiplier.Value * shaftHz,
+                    BSF_Hz = (bearing.BSF_Multiplier ?? 0) * shaftHz,
+                    FTF_Hz = (bearing.FTF_Multiplier ?? 0) * shaftHz,
+                    IsCalculated = false
+                };
+            }
+
+            // 无系数但有几何参数 → 物理公式推算
+            if (bearing.RollerDiameter_d.HasValue && bearing.PitchDiameter_D.HasValue && bearing.PitchDiameter_D.Value > 0)
+            {
+                double d = bearing.RollerDiameter_d.Value;
+                double D = bearing.PitchDiameter_D.Value;
+                double n = bearing.RollerCount_n;
+                double cosA = Math.Cos(bearing.ContactAngle_alpha * Math.PI / 180.0);
+                double ratio = d / D * cosA;
+
+                double ftf = (1.0 - ratio) / 2.0;
+                double bpfo = n * ftf;
+                double bpfi = n * (1.0 + ratio) / 2.0;
+                double bsf = (D / d) * (1.0 - ratio * ratio) / 2.0;
+
+                return new BearingFaultResult
+                {
+                    BPFO_Hz = bpfo * shaftHz,
+                    BPFI_Hz = bpfi * shaftHz,
+                    BSF_Hz = bsf * shaftHz,
+                    FTF_Hz = ftf * shaftHz,
+                    IsCalculated = true
+                };
+            }
+
+            return new BearingFaultResult();
+        }
+
     }
 }

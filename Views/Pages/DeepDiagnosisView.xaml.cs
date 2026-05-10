@@ -14,6 +14,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using BearingFaultDiagnosis.Models;
 using BearingFaultDiagnosis.ViewModels;
 using ScottPlot;
 
@@ -38,6 +39,10 @@ namespace BearingFaultDiagnosis.Views.Pages
 
         private bool _isRendering = false;
         private DeepDiagnosisViewModel _vm;
+        private SpectrumData? _lastOrderData;
+        private SpectrumData? _lastEnvData;
+        private bool _orderDirty = false;
+        private bool _envDirty = false;
 
         public DeepDiagnosisView()
         {
@@ -54,10 +59,24 @@ namespace BearingFaultDiagnosis.Views.Pages
 
         private void Vm_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(DeepDiagnosisViewModel.BarPlot))
+            switch (e.PropertyName)
             {
-                // 必须在 UI 线程刷新
-                Dispatcher.Invoke(() => SoftMaxProbabiltyBar.Refresh());
+                case nameof(DeepDiagnosisViewModel.BarPlot):
+                    Dispatcher.Invoke(() => SoftMaxProbabiltyBar.Refresh());
+                    break;
+                case nameof(DeepDiagnosisViewModel.ShowBPFO):
+                case nameof(DeepDiagnosisViewModel.ShowBPFI):
+                case nameof(DeepDiagnosisViewModel.ShowBSF):
+                case nameof(DeepDiagnosisViewModel.ShowFTF):
+                    _orderDirty = true;
+                    _envDirty = true;
+                    break;
+                case nameof(DeepDiagnosisViewModel.UseAdaptiveOrderView):
+                    _orderDirty = true;
+                    break;
+                case nameof(DeepDiagnosisViewModel.UseAdaptiveEnvView):
+                    _envDirty = true;
+                    break;
             }
         }
 
@@ -207,35 +226,56 @@ namespace BearingFaultDiagnosis.Views.Pages
                 needRefreshPure = true;
             }
 
-            bool needRefreshOrder = false;
-            SpectrumData? lastOrder = null;
-            while (_orderQueue.TryDequeue(out var data))
+            // 阶次谱（缓存 + 故障参考线）
             {
-                lastOrder = data;
-            }
-            if (lastOrder != null && lastOrder.Magnitudes.Length > 0)
-            {
-                OrderPlot.Plot.Clear();
-                var sig = OrderPlot.Plot.Add.Signal(lastOrder.Magnitudes);
-                sig.Data.Period = lastOrder.Resolution; // 单位：阶 (Order)
-                // 常见的阶次谱只关心低阶（如 0~100 阶），这里先让其自适应
-                OrderPlot.Plot.Axes.AutoScale();
-                needRefreshOrder = true;
+                SpectrumData? lastOrder = null;
+                while (_orderQueue.TryDequeue(out var data))
+                {
+                    _lastOrderData = data;
+                    _orderDirty = true;
+                }
+                if (_orderDirty && _lastOrderData != null && _lastOrderData.Magnitudes.Length > 0)
+                {
+                    OrderPlot.Plot.Clear();
+                    var sig = OrderPlot.Plot.Add.Signal(_lastOrderData.Magnitudes);
+                    sig.Data.Period = _lastOrderData.Resolution;
+                    double orderMax = _lastOrderData.Magnitudes.Length * _lastOrderData.Resolution;
+                    double xMax = _vm.UseAdaptiveOrderView
+                        ? Math.Max(GetMaxHarmonicX(isOrderDomain: true) * 1.5, orderMax)
+                        : orderMax;
+                    double yMax = _lastOrderData.Magnitudes.Max() * 1.15;
+                    OrderPlot.Plot.Axes.SetLimitsX(0, xMax);
+                    OrderPlot.Plot.Axes.SetLimitsY(0, yMax);
+                    AddFaultLines(OrderPlot.Plot, isOrderDomain: true);
+                    OrderPlot.Refresh();
+                    _orderDirty = false;
+                }
             }
 
-            bool needRefreshEnv = false;
-            SpectrumData? lastEnv = null;
-            while (_envQueue.TryDequeue(out var data))
+            // 包络谱（缓存 + 故障参考线）
             {
-                lastEnv = data;
-            }
-            if (lastEnv != null && lastEnv.Magnitudes.Length > 0)
-            {
-                EnvPlot.Plot.Clear();
-                var sig = EnvPlot.Plot.Add.Signal(lastEnv.Magnitudes);
-                sig.Data.Period = lastEnv.Resolution; // 单位：赫兹 (Hz)
-                EnvPlot.Plot.Axes.AutoScale();
-                needRefreshEnv = true;
+                SpectrumData? lastEnv = null;
+                while (_envQueue.TryDequeue(out var data))
+                {
+                    _lastEnvData = data;
+                    _envDirty = true;
+                }
+                if (_envDirty && _lastEnvData != null && _lastEnvData.Magnitudes.Length > 0)
+                {
+                    EnvPlot.Plot.Clear();
+                    var sig = EnvPlot.Plot.Add.Signal(_lastEnvData.Magnitudes);
+                    sig.Data.Period = _lastEnvData.Resolution;
+                    double freqMax = _lastEnvData.Magnitudes.Length * _lastEnvData.Resolution;
+                    double xMax = _vm.UseAdaptiveEnvView
+                        ? Math.Max(GetMaxHarmonicX(isOrderDomain: false) * 1.5, freqMax)
+                        : freqMax;
+                    double yMax = _lastEnvData.Magnitudes.Max() * 1.15;
+                    EnvPlot.Plot.Axes.SetLimitsX(0, xMax);
+                    EnvPlot.Plot.Axes.SetLimitsY(0, yMax);
+                    AddFaultLines(EnvPlot.Plot, isOrderDomain: false);
+                    EnvPlot.Refresh();
+                    _envDirty = false;
+                }
             }
 
             // CWT 热力图渲染（WriteableBitmap 像素写入）
@@ -294,8 +334,68 @@ namespace BearingFaultDiagnosis.Views.Pages
             // 图表更新请求 (刷新到屏幕)
             if (needRefreshRaw) RawPlot.Refresh();
             if (needRefreshPure) PurePlot.Refresh();
-            if (needRefreshOrder) OrderPlot.Refresh();
-            if (needRefreshEnv) EnvPlot.Refresh();
+        }
+
+        private double GetMaxHarmonicX(bool isOrderDomain)
+        {
+            if (_vm?.FaultResult == null) return 0;
+
+            double shaftHz = _vm.Rpm > 0 ? _vm.Rpm / 60.0 : 1.0;
+            double scale = isOrderDomain ? 1.0 / shaftHz : 1.0;
+
+            double maxX = 0;
+            if (_vm.ShowBPFO && _vm.FaultResult.BPFO_Hz > 0)
+                maxX = Math.Max(maxX, _vm.FaultResult.BPFO_Hz * scale * 5);
+            if (_vm.ShowBPFI && _vm.FaultResult.BPFI_Hz > 0)
+                maxX = Math.Max(maxX, _vm.FaultResult.BPFI_Hz * scale * 5);
+            if (_vm.ShowBSF && _vm.FaultResult.BSF_Hz > 0)
+                maxX = Math.Max(maxX, _vm.FaultResult.BSF_Hz * scale * 5);
+            if (_vm.ShowFTF && _vm.FaultResult.FTF_Hz > 0)
+                maxX = Math.Max(maxX, _vm.FaultResult.FTF_Hz * scale * 5);
+
+            return maxX;
+        }
+
+        private void AddFaultLines(ScottPlot.Plot plot, bool isOrderDomain)
+        {
+            if (_vm?.FaultResult == null) return;
+
+            double shaftHz = _vm.Rpm > 0 ? _vm.Rpm / 60.0 : 1.0;
+            double scale = isOrderDomain ? 1.0 / shaftHz : 1.0;
+
+            AddHarmonics(plot, _vm.ShowBPFO, _vm.FaultResult.BPFO_Hz * scale, ScottPlot.Color.FromHex("#E74C3C"), "外圈 BPFO");
+            AddHarmonics(plot, _vm.ShowBPFI, _vm.FaultResult.BPFI_Hz * scale, ScottPlot.Color.FromHex("#3498DB"), "内圈 BPFI");
+            AddHarmonics(plot, _vm.ShowBSF,  _vm.FaultResult.BSF_Hz  * scale, ScottPlot.Color.FromHex("#27AE60"), "滚动体 BSF");
+            AddHarmonics(plot, _vm.ShowFTF,  _vm.FaultResult.FTF_Hz  * scale, ScottPlot.Color.FromHex("#F39C12"), "保持架 FTF");
+        }
+
+        private static void AddHarmonics(ScottPlot.Plot plot, bool show, double fundamental,
+            ScottPlot.Color color, string label, int harmonicCount = 5)
+        {
+            if (!show || fundamental <= 0) return;
+
+            // 容差带 ±1% × 谐波次数，最小 0.01
+            double baseTol = Math.Max(fundamental * 0.01, 0.01);
+
+            for (int h = 1; h <= harmonicCount; h++)
+            {
+                double x = fundamental * h;
+                double tol = baseTol * h;
+                double opacity = Math.Max(1.0 - (h - 1) * 0.2, 0.05);
+
+                // 半透明色带（容差区间）
+                var span = plot.Add.HorizontalSpan(x - tol, x + tol);
+                span.FillStyle.Color = color.WithAlpha(opacity * 0.15);
+                span.LineStyle.IsVisible = false;
+
+                // 中心竖线（透明度递减）
+                var line = plot.Add.VerticalLine(x);
+                line.LineStyle.Color = color.WithAlpha(opacity);
+                line.LineStyle.Width = h == 1 ? 2f : 1.5f;
+                line.LineStyle.IsVisible = true;
+                if (h == 1)
+                    line.LabelStyle.Text = label;
+            }
         }
 
         // 预计算 Inferno 色图 256 色 LUT（BGRA 格式）

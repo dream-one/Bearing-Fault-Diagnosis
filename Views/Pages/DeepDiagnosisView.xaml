@@ -4,10 +4,14 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:BearingFaultDiagnosis.Views.Pages"
+             xmlns:converters="clr-namespace:BearingFaultDiagnosis.Converters"
              xmlns:ScottPlot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
              mc:Ignorable="d" 
              d:DesignHeight="900" d:DesignWidth="1600"
              Background="#F5F6FA">
+    <UserControl.Resources>
+        <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
+    </UserControl.Resources>
     <Grid Margin="15">
 
         <Grid>
@@ -45,7 +49,21 @@
                     <RowDefinition Height="1*"/>
                 </Grid.RowDefinitions>
 
-                <TextBlock Text="■ 物理感知分支 (机理特征提取)" FontSize="16" FontWeight="SemiBold" Foreground="#2D3436" Margin="5,0,0,10"/>
+                <Grid Margin="5,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="■ 物理感知分支 (机理特征提取)" FontSize="16" FontWeight="SemiBold" Foreground="#2D3436" VerticalAlignment="Center"/>
+                    <CheckBox Grid.Column="1" Content="外圈 BPFO" IsChecked="{Binding ShowBPFO}" Foreground="#E74C3C" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="16,0,0,0"/>
+                    <CheckBox Grid.Column="2" Content="内圈 BPFI" IsChecked="{Binding ShowBPFI}" Foreground="#3498DB" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    <CheckBox Grid.Column="3" Content="滚动体 BSF"  IsChecked="{Binding ShowBSF}"  Foreground="#27AE60" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    <CheckBox Grid.Column="4" Content="保持架 FTF"  IsChecked="{Binding ShowFTF}"  Foreground="#F39C12" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </Grid>
 
                 <Border Grid.Row="1" Background="White" CornerRadius="8" Margin="0,0,0,10" Padding="10">
                     <Border.Effect>
@@ -56,7 +74,21 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="1*" />
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="变工况阶次谱 (Order Spectrum)" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Top"/>
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="变工况阶次谱 (Order Spectrum)" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Center"/>
+                            <RadioButton Grid.Column="1" Content="全局视图" FontSize="12" Margin="16,0,0,0" VerticalAlignment="Center"
+                                         GroupName="OrderViewMode"
+                                         IsChecked="{Binding UseAdaptiveOrderView, Converter={StaticResource InverseBoolConverter}}"/>
+                            <RadioButton Grid.Column="2" Content="动态自适应故障频带" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
+                                         GroupName="OrderViewMode"
+                                         IsChecked="{Binding UseAdaptiveOrderView}"/>
+                        </Grid>
                         <ScottPlot:WpfPlot Grid.Row="1" x:Name="OrderPlot" Margin="0,5,0,0" />
                     </Grid>
                 </Border>
@@ -70,7 +102,21 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="1*" />
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="包络谱解调分析 (Envelope Spectrum)" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Top"/>
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="包络谱解调分析 (Envelope Spectrum)" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Center"/>
+                            <RadioButton Grid.Column="1" Content="全局视图" FontSize="12" Margin="16,0,0,0" VerticalAlignment="Center"
+                                         GroupName="EnvViewMode"
+                                         IsChecked="{Binding UseAdaptiveEnvView, Converter={StaticResource InverseBoolConverter}}"/>
+                            <RadioButton Grid.Column="2" Content="动态自适应故障频带" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
+                                         GroupName="EnvViewMode"
+                                         IsChecked="{Binding UseAdaptiveEnvView}"/>
+                        </Grid>
                         <ScottPlot:WpfPlot Grid.Row="1" x:Name="EnvPlot" Margin="0,5,0,0" />
                     </Grid>
                 </Border>

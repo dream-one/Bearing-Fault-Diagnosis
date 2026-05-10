@@ -71,11 +71,11 @@ namespace BearingFaultDiagnosis.ViewModels
             // 这里可以根据传入的参数来决定导航到哪个 ViewModel
             // 例如，如果有一个字符串参数 "Dashboard"，就导航到 DashboardViewModel
 
-            if (route == "Dashboard")
+            if (route == "dashboard")
             {
                 CurrentViewModel = App.AppHost!.Services.GetRequiredService<DashboardViewModel>();
             }
-            else if (route == "DeepDiagnosis")
+            else if (route == "deep-diagnosis")
             {
                 CurrentViewModel = App.AppHost!.Services.GetRequiredService<DeepDiagnosisViewModel>();
             }

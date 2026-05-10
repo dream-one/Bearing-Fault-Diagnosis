@@ -1,9 +1,22 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
+using BearingFaultDiagnosis.Entities;
+using BearingFaultDiagnosis.Models;
 
 namespace BearingFaultDiagnosis.Services.Interfaces
 {
     public interface IDeepDiagnosisService
     {
+        /// <summary>
+        /// 获取轴承型号列表
+        /// </summary>
+        Task<List<BearingInfo>> GetBearingListAsync();
+
+        /// <summary>
+        /// 计算轴承故障频率：优先使用数据库系数，否则根据几何参数推算
+        /// </summary>
+        BearingFaultResult CalculateFaultFrequencies(BearingInfo bearing, double rpm);
+
         /// <summary>
         /// 处理一块数据
         /// </summary>
