@@ -28,3 +28,5 @@ bld/
 
 # Visual Studio 2015/2017/2019/2022 cache/options directory
 .vs/
+/.claude
+/亮点总结.md

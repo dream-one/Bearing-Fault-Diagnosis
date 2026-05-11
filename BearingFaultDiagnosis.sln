@@ -5,6 +5,8 @@ VisualStudioVersion = 18.5.11709.299 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BearingFaultDiagnosis", "BearingFaultDiagnosis.csproj", "{5BBE1E93-D81C-4E47-BF07-F825AE014901}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BearingFaultDiagnosis.Tests", "Tests\BearingFaultDiagnosis.Tests.csproj", "{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}"
+EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HighPerformanceComputing", "HighPerformanceComputing\HighPerformanceComputing.vcxproj", "{0D658520-69A3-43D8-B324-BF016BC1F4F8}"
 EndProject
 Global
@@ -41,6 +43,18 @@ Global
 		{0D658520-69A3-43D8-B324-BF016BC1F4F8}.Release|x64.Build.0 = Release|x64
 		{0D658520-69A3-43D8-B324-BF016BC1F4F8}.Release|x86.ActiveCfg = Release|Win32
 		{0D658520-69A3-43D8-B324-BF016BC1F4F8}.Release|x86.Build.0 = Release|Win32
+		{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}.Debug|x64.Build.0 = Debug|Any CPU
+		{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}.Debug|x86.Build.0 = Debug|Any CPU
+		{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}.Release|x64.ActiveCfg = Release|Any CPU
+		{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}.Release|x64.Build.0 = Release|Any CPU
+		{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}.Release|x86.ActiveCfg = Release|Any CPU
+		{F8C4E4B1-2A3D-4E5F-9B7C-8D1E2F3A4B5C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

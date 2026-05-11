@@ -12,12 +12,16 @@
   <ItemGroup>
     <Compile Remove="BearingFaultDiagnosis\**" />
     <Compile Remove="x64\**" />
+    <Compile Remove="Tests\**" />
     <EmbeddedResource Remove="BearingFaultDiagnosis\**" />
     <EmbeddedResource Remove="x64\**" />
+    <EmbeddedResource Remove="Tests\**" />
     <None Remove="BearingFaultDiagnosis\**" />
     <None Remove="x64\**" />
+    <None Remove="Tests\**" />
     <Page Remove="BearingFaultDiagnosis\**" />
     <Page Remove="x64\**" />
+    <Page Remove="Tests\**" />
   </ItemGroup>
 
   <ItemGroup>

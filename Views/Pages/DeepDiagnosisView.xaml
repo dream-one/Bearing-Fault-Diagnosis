@@ -169,7 +169,7 @@
 
 
                         <Grid Grid.Column="1" Margin="10,0,0,0">
-                            <TextBlock Text="深度学习网络预测概率" FontSize="12" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Top"/>
+                            <TextBlock Text="深度学习网络预测概率" FontSize="14" FontWeight="Bold" Foreground="#636E72" Margin="0,0,0,5"/>
                             <ScottPlot:WpfPlot Name="SoftMaxProbabiltyBar" />
                         </Grid>
                     </Grid>

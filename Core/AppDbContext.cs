@@ -14,7 +14,7 @@ namespace BearingFaultDiagnosis.Core
         }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            if (!string.IsNullOrWhiteSpace(strDb))
+            if (!optionsBuilder.IsConfigured && !string.IsNullOrWhiteSpace(strDb))
             {
                 // 提取并确保目录存在
                 var dbPath = strDb.Replace("Data Source = ", "").Trim();
@@ -23,7 +23,7 @@ namespace BearingFaultDiagnosis.Core
                 {
                     Directory.CreateDirectory(directory);
                 }
-                
+
                 optionsBuilder.UseSqlite(strDb);
             }
         }

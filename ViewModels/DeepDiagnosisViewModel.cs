@@ -58,11 +58,15 @@ namespace BearingFaultDiagnosis.ViewModels
         /// <summary>后台任务取消令牌源</summary>
         private readonly CancellationTokenSource _cts = new();
 
-        /// <summary>ONNX 推理会话（四模型集成）</summary>
-        private InferenceSession _inferenceI;
-        private InferenceSession _inferenceJ;
-        private InferenceSession _inferenceK;
-        private InferenceSession _inferenceL;
+        /// <summary>ONNX 推理会话（四模型集成，懒加载）</summary>
+        private readonly Lazy<InferenceSession> _inferenceI = new(
+            () => new InferenceSession("DLModels/best_I_s2024.onnx"), LazyThreadSafetyMode.ExecutionAndPublication);
+        private readonly Lazy<InferenceSession> _inferenceJ = new(
+            () => new InferenceSession("DLModels/best_J_s2024.onnx"), LazyThreadSafetyMode.ExecutionAndPublication);
+        private readonly Lazy<InferenceSession> _inferenceK = new(
+            () => new InferenceSession("DLModels/best_K_s2024.onnx"), LazyThreadSafetyMode.ExecutionAndPublication);
+        private readonly Lazy<InferenceSession> _inferenceL = new(
+            () => new InferenceSession("DLModels/best_L_s2024.onnx"), LazyThreadSafetyMode.ExecutionAndPublication);
 
         /// <summary>最新阶次谱缓存（供诊断使用，volatile 保证跨线程可见性）</summary>
         private volatile double[] _latestOrderSpectrum;
@@ -137,12 +141,6 @@ namespace BearingFaultDiagnosis.ViewModels
 
             _overlapSize = ChunkSize / OverlapDivisor;
 
-            // 加载 ONNX 模型（请确保路径相对于运行目录正确）
-            _inferenceI = new InferenceSession("DLModels/best_I_s2024.onnx");
-            _inferenceJ = new InferenceSession("DLModels/best_J_s2024.onnx");
-            _inferenceK = new InferenceSession("DLModels/best_K_s2024.onnx");
-            _inferenceL = new InferenceSession("DLModels/best_L_s2024.onnx");
-
             // 启动后台数据处理循环
             _ = Task.Run(() => ProcessLoopAsync(_cts.Token));
             // 异步加载轴承列表
@@ -176,6 +174,10 @@ namespace BearingFaultDiagnosis.ViewModels
 
         partial void OnSelectedBearingChanged(BearingInfo value) => RecalcFaultFrequencies();
         partial void OnRpmChanged(double value) => RecalcFaultFrequencies();
+        partial void OnShowBPFOChanged(bool value) => RecalcFaultFrequencies();
+        partial void OnShowBPFIChanged(bool value) => RecalcFaultFrequencies();
+        partial void OnShowBSFChanged(bool value) => RecalcFaultFrequencies();
+        partial void OnShowFTFChanged(bool value) => RecalcFaultFrequencies();
 
         /// <summary>根据当前轴承参数与转速重新计算故障特征频率</summary>
         private void RecalcFaultFrequencies()
@@ -329,10 +331,10 @@ namespace BearingFaultDiagnosis.ViewModels
                 // 3. 并行执行四个子模型推理
                 var tasks = new[]
                 {
-                    Task.Run(() => RunSingleModel(_inferenceI, timeData, specData)),
-                    Task.Run(() => RunSingleModel(_inferenceJ, timeData, specData)),
-                    Task.Run(() => RunSingleModel(_inferenceK, timeData, specData)),
-                    Task.Run(() => RunSingleModel(_inferenceL, timeData, specData))
+                    Task.Run(() => RunSingleModel(_inferenceI.Value, timeData, specData)),
+                    Task.Run(() => RunSingleModel(_inferenceJ.Value, timeData, specData)),
+                    Task.Run(() => RunSingleModel(_inferenceK.Value, timeData, specData)),
+                    Task.Run(() => RunSingleModel(_inferenceL.Value, timeData, specData))
                 };
 
                 float[][] allResults = await Task.WhenAll(tasks);
@@ -347,6 +349,32 @@ namespace BearingFaultDiagnosis.ViewModels
 
                 // 5. 更新 UI 柱状图
                 SetBars(ClassLabels, finalProbs, new double[] { 1, 2, 3 });
+
+                // 6. 根据最高置信度自动勾选对应故障参考线（先确保频率基于当前转速计算）
+                RecalcFaultFrequencies();
+                int maxIdx = Array.IndexOf(finalProbs, finalProbs.Max());
+                switch (maxIdx)
+                {
+                    case 0: // 正常状态 — 全部取消
+                        ShowBPFO = false;
+                        ShowBPFI = false;
+                        ShowBSF = false;
+                        ShowFTF = false;
+                        break;
+                    case 1: // 内圈早期损伤 → 勾选 BPFI
+                        ShowBPFI = true;
+                        ShowBPFO = false;
+                        ShowBSF = false;
+                        ShowFTF = false;
+                        break;
+                    case 2: // 外圈早期损伤 → 勾选 BPFO
+                        ShowBPFO = true;
+                        ShowBPFI = false;
+                        ShowBSF = false;
+                        ShowFTF = false;
+                        break;
+                }
+
                 DiagnosisResult = "诊断完成";
             }
             catch (Exception ex)
@@ -485,11 +513,11 @@ namespace BearingFaultDiagnosis.ViewModels
             _cts.Cancel();
             _cts.Dispose();
 
-            // 释放 ONNX 推理会话
-            _inferenceI?.Dispose();
-            _inferenceJ?.Dispose();
-            _inferenceK?.Dispose();
-            _inferenceL?.Dispose();
+            // 释放 ONNX 推理会话（仅当已创建时）
+            if (_inferenceI.IsValueCreated) _inferenceI.Value?.Dispose();
+            if (_inferenceJ.IsValueCreated) _inferenceJ.Value?.Dispose();
+            if (_inferenceK.IsValueCreated) _inferenceK.Value?.Dispose();
+            if (_inferenceL.IsValueCreated) _inferenceL.Value?.Dispose();
         }
 
         #endregion

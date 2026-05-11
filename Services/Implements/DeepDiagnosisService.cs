@@ -162,6 +162,9 @@ namespace BearingFaultDiagnosis.Services.Implements
 
         public BearingFaultResult CalculateFaultFrequencies(BearingInfo bearing, double rpm)
         {
+            if (rpm <= 0)
+                return new BearingFaultResult();
+
             double shaftHz = rpm / 60.0;
 
             // 优先使用数据库已存系数
