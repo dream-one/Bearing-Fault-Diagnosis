@@ -59,6 +59,9 @@
         <DataTemplate DataType="{x:Type vm:DeepDiagnosisViewModel}">
             <views:DeepDiagnosisView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:BearingInfoViewModel}">
+            <views:BearingInfoView />
+        </DataTemplate>
 
         <!-- Page toolbar buttons (shown in unified title bar) -->
         <DataTemplate x:Key="DashboardToolbar" DataType="{x:Type vm:DashboardViewModel}">
@@ -92,6 +95,13 @@
                 <TextBlock Text="RPM" Foreground="#475569" FontSize="13" VerticalAlignment="Center" Margin="0,0,12,0"/>
                 <Button Content="执行AI诊断" Command="{Binding ExecuteDualBranchDiagnosisCommand}" Style="{StaticResource TitleBarPrimaryButtonStyle}"/>
                 <Button Content="导出诊断报告" Style="{StaticResource TitleBarButtonStyle}"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="BearingInfoToolbar" DataType="{x:Type vm:BearingInfoViewModel}">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="⟳ 刷新" Command="{Binding LoadBearingsCommand}" Style="{StaticResource TitleBarButtonStyle}"/>
+                <Button Content="＋ 新增轴承" Command="{Binding NewBearingCommand}" Style="{StaticResource TitleBarPrimaryButtonStyle}"/>
             </StackPanel>
         </DataTemplate>
 
@@ -274,6 +284,9 @@
                             </DataTemplate>
                             <DataTemplate DataType="{x:Type vm:DeepDiagnosisViewModel}">
                                 <ContentControl Content="{Binding .}" ContentTemplate="{StaticResource DeepDiagnosisToolbar}"/>
+                            </DataTemplate>
+                            <DataTemplate DataType="{x:Type vm:BearingInfoViewModel}">
+                                <ContentControl Content="{Binding .}" ContentTemplate="{StaticResource BearingInfoToolbar}"/>
                             </DataTemplate>
                         </ContentControl.Resources>
                     </ContentControl>

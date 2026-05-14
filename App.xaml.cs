@@ -42,12 +42,14 @@ namespace BearingFaultDiagnosis
                     services.AddTransient<DashboardViewModel>();
                     services.AddTransient<LoginViewModel>();
                     services.AddTransient<DeepDiagnosisViewModel>();
+                    services.AddTransient<BearingInfoViewModel>();
 
                     // 3. 注册 UI 窗体
                     services.AddTransient<MainWindow>();
                     services.AddTransient<LoginWindow>();
                     services.AddTransient<DashboardView>();
                     services.AddTransient<DeepDiagnosisView>();
+                    services.AddTransient<Views.Pages.BearingInfoView>();
 
                     //注册单例服务
                     services.AddSingleton<Services.Interfaces.ITCPServerService, Services.Implements.TCPServerService>();
@@ -55,6 +57,7 @@ namespace BearingFaultDiagnosis
                     services.AddSingleton<AppSession>();
                     services.AddTransient<Services.Interfaces.IUserService, Services.Implements.UserService>();
                     services.AddSingleton<Services.Interfaces.ISensorDataService, Services.Implements.SensorDataService>();
+                    services.AddTransient<Services.Interfaces.IBearingInfoService, Services.Implements.BearingInfoService>();
 
                     // 将 JSON 中的 "ServerSettings" 部分绑定到 ServerSettings 类
                     services.Configure<ServerSettings>(hostContext.Configuration.GetSection("ServerSettings"));

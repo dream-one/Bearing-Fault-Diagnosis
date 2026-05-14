@@ -79,6 +79,10 @@ namespace BearingFaultDiagnosis.ViewModels
             {
                 CurrentViewModel = App.AppHost!.Services.GetRequiredService<DeepDiagnosisViewModel>();
             }
+            else if (route == "bearing-info")
+            {
+                CurrentViewModel = App.AppHost!.Services.GetRequiredService<BearingInfoViewModel>();
+            }
         }
     }
 }

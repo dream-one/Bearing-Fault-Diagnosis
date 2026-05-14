@@ -1,0 +1,259 @@
+<UserControl x:Class="BearingFaultDiagnosis.Views.Pages.BearingInfoView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:BearingFaultDiagnosis.Views.Pages"
+             xmlns:converters="clr-namespace:BearingFaultDiagnosis.Converters"
+             mc:Ignorable="d" 
+             d:DesignHeight="900" d:DesignWidth="1600"
+             Background="#F5F6FA">
+    <UserControl.Resources>
+        <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <!-- 卡片样式 -->
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="20"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#e2e8f0" BlurRadius="8" ShadowDepth="1" Opacity="0.4"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 标签样式 -->
+        <Style x:Key="LabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#475569"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+
+        <!-- 文本框样式 -->
+        <Style x:Key="TextBoxStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Background" Value="White"/>
+        </Style>
+
+        <!-- 按钮基本样式 -->
+        <Style x:Key="ActionButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <!-- 主要按钮 -->
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Background" Value="#0F172A"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- 次要按钮 -->
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Background" Value="#F1F5F9"/>
+            <Setter Property="Foreground" Value="#475569"/>
+        </Style>
+
+        <!-- 危险按钮 -->
+        <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Background" Value="#FEE2E2"/>
+            <Setter Property="Foreground" Value="#DC2626"/>
+        </Style>
+
+        <!-- DataGrid 样式 -->
+        <Style x:Key="DataGridStyle" TargetType="DataGrid">
+            <Setter Property="AutoGenerateColumns" Value="False"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="GridLinesVisibility" Value="None"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="RowHeight" Value="40"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="AlternatingRowBackground" Value="#F8FAFC"/>
+            <Setter Property="RowBackground" Value="White"/>
+            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="SelectionUnit" Value="FullRow"/>
+            <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 页面标题与操作栏 -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                <TextBlock Text="轴承信息管理" FontSize="22" FontWeight="Bold" Foreground="#1E293B"/>
+                <TextBlock Text="管理轴承型号、几何参数与故障特征系数" FontSize="13" Foreground="#94A3B8" Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <Button Content="⟳ 刷新" Command="{Binding LoadBearingsCommand}"
+                        Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"/>
+                <Button Content="＋ 新增轴承" Command="{Binding NewBearingCommand}"
+                        Style="{StaticResource PrimaryButtonStyle}"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- 主体区域：左侧列表 + 右侧表单 -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="1*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ========== 左侧：轴承列表 ========== -->
+            <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 状态栏 -->
+                    <Grid Grid.Row="0" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" 
+                                   Foreground="#64748B" FontSize="13" VerticalAlignment="Center"/>
+                        <ProgressBar Grid.Column="1" IsIndeterminate="True" 
+                                     Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"
+                                     Width="100" Height="4" Margin="8,0,0,0"/>
+                    </Grid>
+
+                    <!-- 数据表格 -->
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding Bearings}"
+                              SelectedItem="{Binding SelectedBearing}"
+                              Style="{StaticResource DataGridStyle}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="厂商" Binding="{Binding Manufacturer}" Width="1*"/>
+                            <DataGridTextColumn Header="型号" Binding="{Binding Model}" Width="1.5*"/>
+                            <DataGridTextColumn Header="滚子数" Binding="{Binding RollerCount_n}" Width="0.8*"/>
+                            <DataGridTextColumn Header="滚子直径(mm)" Binding="{Binding RollerDiameter_d, StringFormat=N2}" Width="1*"/>
+                            <DataGridTextColumn Header="节径(mm)" Binding="{Binding PitchDiameter_D, StringFormat=N2}" Width="1*"/>
+                            <DataGridTextColumn Header="接触角(°)" Binding="{Binding ContactAngle_alpha, StringFormat=N1}" Width="0.8*"/>
+                            <DataGridTextColumn Header="BPFO系数" Binding="{Binding BPFO_Multiplier, StringFormat=N4}" Width="0.8*"/>
+                            <DataGridTextColumn Header="BPFI系数" Binding="{Binding BPFI_Multiplier, StringFormat=N4}" Width="0.8*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <!-- ========== 右侧：编辑表单 ========== -->
+            <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 表单标题 -->
+                    <TextBlock Grid.Row="0" FontSize="16" FontWeight="SemiBold" Foreground="#1E293B" Margin="0,0,0,16"
+                               Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Run Text="编辑轴承"/>
+                    </TextBlock>
+                    <TextBlock Grid.Row="0" FontSize="16" FontWeight="SemiBold" Foreground="#1E293B" Margin="0,0,0,16"
+                               Visibility="{Binding IsEditMode, Converter={StaticResource InverseBoolConverter}}">
+                        <Run Text="新增轴承"/>
+                    </TextBlock>
+
+                    <!-- 表单字段 -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <!-- 厂商 -->
+                            <TextBlock Text="厂商" Style="{StaticResource LabelStyle}"/>
+                            <TextBox Text="{Binding FormManufacturer, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{StaticResource TextBoxStyle}" Margin="0,0,0,12"/>
+
+                            <!-- 型号 -->
+                            <TextBlock Text="型号 *" Style="{StaticResource LabelStyle}"/>
+                            <TextBox Text="{Binding FormModel, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{StaticResource TextBoxStyle}" Margin="0,0,0,12"/>
+
+                            <!-- 滚子数 -->
+                            <TextBlock Text="滚子数 *" Style="{StaticResource LabelStyle}"/>
+                            <TextBox Text="{Binding FormRollerCount, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{StaticResource TextBoxStyle}" Margin="0,0,0,12"/>
+
+                            <!-- 滚子直径 -->
+                            <TextBlock Text="滚子直径 (mm)" Style="{StaticResource LabelStyle}"/>
+                            <TextBox Text="{Binding FormRollerDiameter, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{StaticResource TextBoxStyle}" Margin="0,0,0,12"/>
+
+                            <!-- 节径 -->
+                            <TextBlock Text="节径 (mm)" Style="{StaticResource LabelStyle}"/>
+                            <TextBox Text="{Binding FormPitchDiameter, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{StaticResource TextBoxStyle}" Margin="0,0,0,12"/>
+
+                            <!-- 接触角 -->
+                            <TextBlock Text="接触角 (°)" Style="{StaticResource LabelStyle}"/>
+                            <TextBox Text="{Binding FormContactAngle, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{StaticResource TextBoxStyle}" Margin="0,0,0,12"/>
+
+                            <!-- 分隔线 -->
+                            <Border Height="1" Background="#E2E8F0" Margin="0,4,0,12"/>
+
+                            <TextBlock Text="故障特征系数" FontSize="14" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,8"/>
+
+                            <!-- BPFO -->
+                            <TextBlock Text="BPFO 系数" Style="{StaticResource LabelStyle}"/>
+                            <TextBox Text="{Binding FormBpfoMultiplier, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{StaticResource TextBoxStyle}" Margin="0,0,0,12"/>
+
+                            <!-- BPFI -->
+                            <TextBlock Text="BPFI 系数" Style="{StaticResource LabelStyle}"/>
+                            <TextBox Text="{Binding FormBpfiMultiplier, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{StaticResource TextBoxStyle}" Margin="0,0,0,12"/>
+
+                            <!-- BSF -->
+                            <TextBlock Text="BSF 系数" Style="{StaticResource LabelStyle}"/>
+                            <TextBox Text="{Binding FormBsfMultiplier, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{StaticResource TextBoxStyle}" Margin="0,0,0,12"/>
+
+                            <!-- FTF -->
+                            <TextBlock Text="FTF 系数" Style="{StaticResource LabelStyle}"/>
+                            <TextBox Text="{Binding FormFtfMultiplier, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{StaticResource TextBoxStyle}" Margin="0,0,0,4"/>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- 操作按钮 -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                        <Button Content="取消" Command="{Binding CancelEditCommand}"
+                                Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"/>
+                        <Button Content="删除" Command="{Binding DeleteBearingCommand}"
+                                Style="{StaticResource DangerButtonStyle}" Margin="0,0,8,0"/>
+                        <Button Content="保存修改" Command="{Binding SaveBearingCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>
