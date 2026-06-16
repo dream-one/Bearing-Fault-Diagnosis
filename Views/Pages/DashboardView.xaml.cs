@@ -103,10 +103,18 @@ namespace BearingFaultDiagnosis.Views.Pages
         {
             if (e.Action == NotifyCollectionChangedAction.Add && dataListLog.Items.Count > 0)
             {
-                var lastItem = dataListLog.Items[dataListLog.Items.Count - 1];
-                dataListLog.ScrollIntoView(lastItem);
+                // Background 优先级：在所有布局、渲染、数据绑定完成后执行
+                // 避免 VirtualizingStackPanel 容器未生成导致 ArgumentOutOfRangeException
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        if (dataListLog.Items.Count > 0)
+                            dataListLog.ScrollIntoView(dataListLog.Items[^1]);
+                    }
+                    catch (ArgumentOutOfRangeException) { /* 虚拟面板竞态，安全忽略 */ }
+                }), DispatcherPriority.Background);
             }
-
         }
 
     }

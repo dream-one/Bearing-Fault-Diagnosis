@@ -7,21 +7,27 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);Microsoft.Extensions.Configuration.Binder.SourceGeneration</InterceptorsPreviewNamespaces>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Remove="BearingFaultDiagnosis\**" />
     <Compile Remove="x64\**" />
     <Compile Remove="Tests\**" />
+    <Compile Remove="Tools\**" />
     <EmbeddedResource Remove="BearingFaultDiagnosis\**" />
     <EmbeddedResource Remove="x64\**" />
     <EmbeddedResource Remove="Tests\**" />
+    <EmbeddedResource Remove="Tools\**" />
     <None Remove="BearingFaultDiagnosis\**" />
     <None Remove="x64\**" />
     <None Remove="Tests\**" />
+    <None Remove="Tools\**" />
     <Page Remove="BearingFaultDiagnosis\**" />
     <Page Remove="x64\**" />
     <Page Remove="Tests\**" />
+    <Page Remove="Tools\**" />
   </ItemGroup>
 
   <ItemGroup>

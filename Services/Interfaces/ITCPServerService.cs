@@ -20,6 +20,11 @@ namespace BearingFaultDiagnosis.Services.Interfaces
         Task StartListeningAsync(int port, CancellationToken cancellationToken);
 
         /// <summary>
+        /// 停止 TCP 监听并断开当前客户端
+        /// </summary>
+        void StopListening();
+
+        /// <summary>
         /// ip,消息内容
         /// </summary>
         event Action<string, string> OnMessageReceived;

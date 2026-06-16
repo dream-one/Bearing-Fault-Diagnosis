@@ -81,25 +81,21 @@ namespace BearingFaultDiagnosis.Services.Implements
             OnMessageReceived.Invoke(port.ToString(), $"TCP 服务器已启动，正在监听端口: {port}");
             try
             {
-                // 无限循环接收客户端连接，直到触发 cancellationToken
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     TcpClient client = await _listener.AcceptTcpClientAsync(cancellationToken);
 
-                    // --- 核心改动：先关闭旧连接任务，并等待它清理完成 ---
                     if (_activateClient != null)
                     {
-                        _clientCts?.Cancel(); // 通知旧任务停止
-                        try { _activateClient.Close(); } catch { } // 强制关流
+                        _clientCts?.Cancel();
+                        try { _activateClient.Close(); } catch { }
                     }
                     _clientCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     _activateClient = client;
 
-                    // 这里的 await 释放了线程，绝对不会卡死 WPF 的 UI 界面
                     var clientIp = client.Client.RemoteEndPoint?.ToString();
                     OnMessageReceived.Invoke(clientIp, $" 新客户端已连接: {clientIp}");
 
-                    // 启动一个独立的后台任务去处理这个客户端的数据，不阻塞下一个客户端连入
                     _ = Task.Run(() => HandleClientAsync(client, _clientCts.Token), CancellationToken.None);
                 }
             }
@@ -107,11 +103,35 @@ namespace BearingFaultDiagnosis.Services.Implements
             {
                 _logger.LogInformation("TCP 监听已被手动取消。");
             }
+            catch (SocketException)
+            {
+                // StopListening() 调用 _listener.Stop() 后 AcceptTcpClientAsync 会抛出此异常
+                _logger.LogInformation("TCP 监听已停止。");
+            }
+            catch (ObjectDisposedException)
+            {
+                _logger.LogInformation("TCP 监听器已释放。");
+            }
             finally
             {
-                _listener.Stop();
+                try { _listener?.Stop(); } catch { }
                 _isListening = false;
             }
+        }
+
+        /// <summary>
+        /// 停止 TCP 监听并断开当前客户端连接
+        /// </summary>
+        public void StopListening()
+        {
+            // 关闭当前活跃的客户端连接
+            _clientCts?.Cancel();
+            try { _activateClient?.Close(); } catch { }
+            _activateClient = null;
+
+            // 停止监听器，使 AcceptTcpClientAsync 立即返回
+            try { _listener?.Stop(); } catch { }
+            _isListening = false;
         }
 
         private async Task HandleClientAsync(TcpClient client, CancellationToken token)

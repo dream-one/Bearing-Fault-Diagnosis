@@ -1,19 +1,17 @@
-﻿<UserControl x:Class="BearingFaultDiagnosis.Views.Pages.DeepDiagnosisView"
+<UserControl x:Class="BearingFaultDiagnosis.Views.Pages.DeepDiagnosisView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:BearingFaultDiagnosis.Views.Pages"
              xmlns:converters="clr-namespace:BearingFaultDiagnosis.Converters"
              xmlns:ScottPlot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
-             mc:Ignorable="d" 
+             mc:Ignorable="d"
              d:DesignHeight="900" d:DesignWidth="1600"
              Background="#F5F6FA">
     <UserControl.Resources>
-        <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
     </UserControl.Resources>
     <Grid Margin="15">
-
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="1*"/>
@@ -25,7 +23,7 @@
                 <RowDefinition Height="2*"/>
             </Grid.RowDefinitions>
 
-            <!-- 全宽波形图 -->
+            <!-- ========== 上方：多源传感器实时信号监测 ========== -->
             <Border Grid.Row="0" Grid.ColumnSpan="3" Background="White" CornerRadius="8" Margin="0,0,0,10" Padding="10">
                 <Border.Effect>
                     <DropShadowEffect Color="#DDDDDD" BlurRadius="5" ShadowDepth="1" Opacity="0.5"/>
@@ -36,12 +34,13 @@
                         <RowDefinition Height="1*" />
                         <RowDefinition Height="1*" />
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="原始时域波形 vs 角域重采样波形" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Top"/>
-                    <ScottPlot:WpfPlot Grid.Row="1" x:Name="RawPlot" Margin="0,5,0,5" />
-                    <ScottPlot:WpfPlot Grid.Row="2" x:Name="PurePlot" Margin="0,5,0,0" />
+                    <TextBlock Grid.Row="0" Text="多源传感器实时信号监测" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Top"/>
+                    <ScottPlot:WpfPlot Grid.Row="1" x:Name="VibrationPlot" Margin="0,5,0,5" />
+                    <ScottPlot:WpfPlot Grid.Row="2" x:Name="CurrentTiltPlot" Margin="0,5,0,0" />
                 </Grid>
             </Border>
 
+            <!-- ========== 下方：算法监测卡片区（2x2） ========== -->
             <Grid Grid.Column="0" Grid.Row="1">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -49,6 +48,7 @@
                     <RowDefinition Height="1*"/>
                 </Grid.RowDefinitions>
 
+                <!-- 行1：标题区（继承原布局的行高） -->
                 <Grid Margin="5,0,0,10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -58,13 +58,10 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="■ 物理感知分支 (机理特征提取)" FontSize="16" FontWeight="SemiBold" Foreground="#2D3436" VerticalAlignment="Center"/>
-                    <CheckBox Grid.Column="1" Content="外圈 BPFO" IsChecked="{Binding ShowBPFO}" Foreground="#E74C3C" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="16,0,0,0"/>
-                    <CheckBox Grid.Column="2" Content="内圈 BPFI" IsChecked="{Binding ShowBPFI}" Foreground="#3498DB" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                    <CheckBox Grid.Column="3" Content="滚动体 BSF"  IsChecked="{Binding ShowBSF}"  Foreground="#27AE60" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                    <CheckBox Grid.Column="4" Content="保持架 FTF"  IsChecked="{Binding ShowFTF}"  Foreground="#F39C12" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    <TextBlock Grid.Column="0" Text="■ 算法诊断监测" FontSize="16" FontWeight="SemiBold" Foreground="#2D3436" VerticalAlignment="Center"/>
                 </Grid>
 
+                <!-- 卡片1：螺栓松动监测（左上） -->
                 <Border Grid.Row="1" Background="White" CornerRadius="8" Margin="0,0,0,10" Padding="10">
                     <Border.Effect>
                         <DropShadowEffect Color="#DDDDDD" BlurRadius="5" ShadowDepth="1" Opacity="0.5"/>
@@ -73,26 +70,40 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="1*" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <Grid Grid.Row="0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="变工况阶次谱 (Order Spectrum)" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Center"/>
-                            <RadioButton Grid.Column="1" Content="全局视图" FontSize="12" Margin="16,0,0,0" VerticalAlignment="Center"
-                                         GroupName="OrderViewMode"
-                                         IsChecked="{Binding UseAdaptiveOrderView, Converter={StaticResource InverseBoolConverter}}"/>
-                            <RadioButton Grid.Column="2" Content="动态自适应故障频带" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
-                                         GroupName="OrderViewMode"
-                                         IsChecked="{Binding UseAdaptiveOrderView}"/>
+                        <TextBlock Grid.Row="0" Text="螺栓松动监测 (倾角漂移分析)" FontSize="14" FontWeight="Bold" Foreground="#636E72"/>
+                        <ScottPlot:WpfPlot Grid.Row="1" x:Name="BoltMonitorPlot" Margin="0,5,0,5" />
+                        <Grid Grid.Row="2" Margin="0,6,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- 第一行：漂移量 + 漂移速率（保持现有） -->
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <TextBlock Text="当前漂移量: " FontSize="12" Foreground="#888"/>
+                                <TextBlock Text="{Binding CurrentDrift}" FontSize="12" Foreground="#E74C3C" FontWeight="Bold"/>
+                                <TextBlock Text="  漂移速率: " FontSize="12" Foreground="#888" Margin="12,0,0,0"/>
+                                <TextBlock Text="{Binding DriftRate}" FontSize="12" Foreground="#F39C12" FontWeight="Bold"/>
+                            </StackPanel>
+
+                            <!-- 第二行：算法状态信息 -->
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,3,0,0">
+                                <TextBlock Text="状态: " FontSize="11" Foreground="#888"/>
+                                <TextBlock Text="{Binding BoltAlarmText}" FontSize="11" Foreground="{Binding BoltAlarmColor}" FontWeight="Bold"/>
+                                <TextBlock Text="  θ_DC: " FontSize="11" Foreground="#888" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding BoltTiltText}" FontSize="11" Foreground="#8E44AD"/>
+                                <TextBlock Text="  基线: " FontSize="11" Foreground="#888" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding BoltBaselineText}" FontSize="11" Foreground="#636E72"/>
+                                <TextBlock Text="  温补: " FontSize="11" Foreground="#888" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding BoltTempCompText}" FontSize="11" Foreground="#1ABC9C"/>
+                            </StackPanel>
                         </Grid>
-                        <ScottPlot:WpfPlot Grid.Row="1" x:Name="OrderPlot" Margin="0,5,0,0" />
                     </Grid>
                 </Border>
 
+                <!-- 卡片3：风口堵塞预警（左下） -->
                 <Border Grid.Row="2" Background="White" CornerRadius="8" Padding="10">
                     <Border.Effect>
                         <DropShadowEffect Color="#DDDDDD" BlurRadius="5" ShadowDepth="1" Opacity="0.5"/>
@@ -101,77 +112,120 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="1*" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <Grid Grid.Row="0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="包络谱解调分析 (Envelope Spectrum)" FontSize="14" FontWeight="Bold" Foreground="#636E72" VerticalAlignment="Center"/>
-                            <RadioButton Grid.Column="1" Content="全局视图" FontSize="12" Margin="16,0,0,0" VerticalAlignment="Center"
-                                         GroupName="EnvViewMode"
-                                         IsChecked="{Binding UseAdaptiveEnvView, Converter={StaticResource InverseBoolConverter}}"/>
-                            <RadioButton Grid.Column="2" Content="动态自适应故障频带" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
-                                         GroupName="EnvViewMode"
-                                         IsChecked="{Binding UseAdaptiveEnvView}"/>
+                        <TextBlock Grid.Row="0" Text="风口堵塞预警 (电流RMS偏差)" FontSize="14" FontWeight="Bold" Foreground="#636E72"/>
+                        <ScottPlot:WpfPlot Grid.Row="1" x:Name="BlockageMonitorPlot" Margin="0,5,0,5" />
+                        <!-- 底部信息区 -->
+                        <Grid Grid.Row="2" Margin="0,6,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- 第一行：进度条 -->
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding ExceedDurationText}" FontSize="12" Foreground="#888" VerticalAlignment="Center"/>
+                                <ProgressBar Grid.Column="1" Margin="8,0,0,0" Height="18"
+                                             Minimum="0" Maximum="{Binding ExceedDurationMax}"
+                                             Value="{Binding ExceedDurationValue}"
+                                             Foreground="{Binding ExceedDurationColor}"
+                                             Background="#EEE"/>
+                            </Grid>
+
+                            <!-- 第二行：算法状态信息 -->
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,3,0,0">
+                                <TextBlock Text="状态: " FontSize="11" Foreground="#888"/>
+                                <TextBlock Text="{Binding BlockageAlarmText}" FontSize="11" Foreground="{Binding BlockageAlarmColor}" FontWeight="Bold"/>
+                                <TextBlock Text="  RMS: " FontSize="11" Foreground="#888" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding BlockageRmsText}" FontSize="11" Foreground="#3498DB"/>
+                                <TextBlock Text="  ΔI: " FontSize="11" Foreground="#888" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding BlockageDeltaIText}" FontSize="11" Foreground="#E67E22" FontWeight="Bold"/>
+                                <TextBlock Text="  基线: " FontSize="11" Foreground="#888" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding BlockageBaselineText}" FontSize="11" Foreground="#636E72"/>
+                                <TextBlock Text="  连续: " FontSize="11" Foreground="#888" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding BlockageConsecutiveText}" FontSize="11" Foreground="#E74C3C"/>
+                            </StackPanel>
                         </Grid>
-                        <ScottPlot:WpfPlot Grid.Row="1" x:Name="EnvPlot" Margin="0,5,0,0" />
                     </Grid>
                 </Border>
             </Grid>
 
+            <!-- 右侧列 -->
             <Grid Grid.Column="2" Grid.Row="1">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="1*"/>
+                    <RowDefinition Height="1*"/>
                 </Grid.RowDefinitions>
 
-                <TextBlock Text="■ 数据驱动分支 (深度特征提取)" FontSize="16" FontWeight="SemiBold" Foreground="#2D3436" Margin="5,0,0,10"/>
+                <TextBlock Text="■ 特征分析与补偿" FontSize="16" FontWeight="SemiBold" Foreground="#2D3436" Margin="5,0,0,10"/>
 
+                <!-- 卡片2：叶片不平衡监测（右上） -->
                 <Border Grid.Row="1" Background="White" CornerRadius="8" Margin="0,0,0,10" Padding="10">
                     <Border.Effect>
                         <DropShadowEffect Color="#DDDDDD" BlurRadius="5" ShadowDepth="1" Opacity="0.5"/>
                     </Border.Effect>
-
                     <Grid>
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                            <RowDefinition Height="18"/>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="1*" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="CWT 连续小波时频热力图" FontSize="14" FontWeight="Bold" Foreground="#636E72" Margin="0,0,0,5"/>
-                        <Grid Grid.Row="1">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="36"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid Grid.Column="0">
-                                <TextBlock Text="16k" FontSize="10" Foreground="#999" VerticalAlignment="Top" HorizontalAlignment="Center"/>
-                                <TextBlock Text="0" FontSize="10" Foreground="#999" VerticalAlignment="Bottom" HorizontalAlignment="Center"/>
-                            </Grid>
-                            <Image Grid.Column="1" x:Name="CwtHeatmapImage" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                        <TextBlock Grid.Row="0" Text="叶片不平衡监测 (振动频谱特征)" FontSize="14" FontWeight="Bold" Foreground="#636E72"/>
+                        <ScottPlot:WpfPlot Grid.Row="1" x:Name="BladeMonitorPlot" Margin="0,5,0,5" />
+                        <Grid Grid.Row="2" Margin="0,4,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <!-- 第一行: 特征值 -->
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <TextBlock Text="1×fr A1: " FontSize="12" Foreground="#888"/>
+                                <TextBlock Text="{Binding Amp1Fr}" FontSize="12" Foreground="#3498DB" FontWeight="Bold"/>
+                                <TextBlock Text="  R21: " FontSize="12" Foreground="#888" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding HarmonicRatio}" FontSize="12" Foreground="#27AE60" FontWeight="Bold"/>
+                                <TextBlock Text="  σφ: " FontSize="12" Foreground="#888" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding PhaseStability}" FontSize="12" Foreground="#F39C12" FontWeight="Bold"/>
+                            </StackPanel>
+                            <!-- 第二行: 算法状态信息 -->
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,3,0,0">
+                                <TextBlock Text="状态: " FontSize="11" Foreground="#888"/>
+                                <TextBlock Text="{Binding BladeAlarmText}" FontSize="11" Foreground="{Binding BladeAlarmColor}" FontWeight="Bold"/>
+                                <TextBlock Text="  EWMA: " FontSize="11" Foreground="#888" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding EwmaAmplitude}" FontSize="11" Foreground="#27AE60"/>
+                                <TextBlock Text="  基线: " FontSize="11" Foreground="#888" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding BaselineStatus}" FontSize="11" Foreground="#636E72"/>
+                                <TextBlock Text="  连续: " FontSize="11" Foreground="#888" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding ConsecutiveText}" FontSize="11" Foreground="#E74C3C"/>
+                            </StackPanel>
                         </Grid>
-                        <TextBlock Grid.Row="2" Text="时间 (s)" FontSize="10" Foreground="#999" HorizontalAlignment="Center"/>
                     </Grid>
                 </Border>
 
+                <!-- 卡片4：辅助验证与环境补偿（右下） -->
                 <Border Grid.Row="2" Background="White" CornerRadius="8" Padding="10">
                     <Border.Effect>
                         <DropShadowEffect Color="#DDDDDD" BlurRadius="5" ShadowDepth="1" Opacity="0.5"/>
                     </Border.Effect>
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1.5*"/>
-                        </Grid.ColumnDefinitions>
-
-
-                        <Grid Grid.Column="1" Margin="10,0,0,0">
-                            <TextBlock Text="深度学习网络预测概率" FontSize="14" FontWeight="Bold" Foreground="#636E72" Margin="0,0,0,5"/>
-                            <ScottPlot:WpfPlot Name="SoftMaxProbabiltyBar" />
-                        </Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="1*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="辅助验证与环境补偿" FontSize="14" FontWeight="Bold" Foreground="#636E72"/>
+                        <ScottPlot:WpfPlot Grid.Row="1" x:Name="AuxMonitorPlot" Margin="0,5,0,5" />
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0">
+                            <TextBlock Text="环境温度: " FontSize="12" Foreground="#888"/>
+                            <TextBlock Text="{Binding AmbientTemp}" FontSize="12" Foreground="#888"/>
+                            <TextBlock Text="  温度补偿: " FontSize="12" Foreground="#888" Margin="12,0,0,0"/>
+                            <TextBlock Text="{Binding TempCompStatus}" FontSize="12" Foreground="#27AE60" FontWeight="Bold"/>
+                        </StackPanel>
                     </Grid>
                 </Border>
             </Grid>

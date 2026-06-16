@@ -8,38 +8,29 @@ using BearingFaultDiagnosis.Models;
 using BearingFaultDiagnosis.Services.Interfaces;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.ML.OnnxRuntime;
-using Microsoft.ML.OnnxRuntime.Tensors;
 using ScottPlot;
+using ScottPlot.DataSources;
+using ScottPlot.Plottables;
+using SWM = System.Windows.Media;
 
 namespace BearingFaultDiagnosis.ViewModels
 {
-    /// <summary>
-    /// 深度学习轴承故障诊断视图模型
-    /// 负责实时数据流处理、阶次跟踪、谱分析、ONNX模型集成推理及图表渲染
-    /// </summary>
     public partial class DeepDiagnosisViewModel : ViewModelBase, IDisposable
     {
         #region 常量与配置
 
-        /// <summary>数据块大小（与模型输入及缓冲区一致）</summary>
         private const int ChunkSize = 32768;
-        /// <summary>重叠保留比例（50% 重叠）</summary>
         private const int OverlapDivisor = 2;
-        /// <summary>时域分支模型输入长度</summary>
-        private const int TimeDataLength = 2048;
-        /// <summary>频谱分支模型输入长度</summary>
-        private const int SpecDataLength = 1024;
-        /// <summary>默认转速 (RPM)</summary>
-        private const double DefaultRpm = 1500.0;
-        /// <summary>默认采样率 (Hz)</summary>
-        private const double DefaultSampleRate = 64000.0;
-        /// <summary>阶次跟踪目标每转采样点数</summary>
-        private const int TargetSpr = 512;
-        /// <summary>CWT 热力图计算节流帧数（每 N 帧计算一次）</summary>
-        private const int CwtThrottleFrames = 2;
-        /// <summary>分类标签</summary>
-        private static readonly string[] ClassLabels = { "正常状态", "内圈早期损伤", "外圈早期损伤" };
+        private const double DefaultSampleRate = 5000.0;
+        private const double RatedRpm = 2000.0;
+        private const double RatedRpmHz = RatedRpm / 60.0; // ~33.33 Hz
+
+        // 状态颜色常量
+        private static readonly SWM.SolidColorBrush ColorGreen = new(SWM.Color.FromRgb(0x16, 0xA3, 0x4A));
+        private static readonly SWM.SolidColorBrush ColorGray = new(SWM.Color.FromRgb(0x94, 0xA3, 0xB8));
+        private static readonly SWM.SolidColorBrush ColorYellow = new(SWM.Color.FromRgb(0xF5, 0x9E, 0x0B));
+        private static readonly SWM.SolidColorBrush ColorOrange = new(SWM.Color.FromRgb(0xF3, 0x9C, 0x12));
+        private static readonly SWM.SolidColorBrush ColorRed = new(SWM.Color.FromRgb(0xDC, 0x26, 0x26));
 
         #endregion
 
@@ -48,91 +39,197 @@ namespace BearingFaultDiagnosis.ViewModels
         private readonly IDeepDiagnosisService _deepDiagnosisService;
         private readonly ISensorDataService _sensorDataService;
 
-        /// <summary>环形缓冲区（复用内存，避免频繁 GC）</summary>
         private readonly double[] _buffer = new double[ChunkSize];
-        /// <summary>当前缓冲区有效数据点数</summary>
         private int _currentCount;
-        /// <summary>重叠区大小</summary>
         private readonly int _overlapSize;
 
-        /// <summary>后台任务取消令牌源</summary>
         private readonly CancellationTokenSource _cts = new();
-
-        /// <summary>ONNX 推理会话（四模型集成，懒加载）</summary>
-        private readonly Lazy<InferenceSession> _inferenceI = new(
-            () => new InferenceSession("DLModels/best_I_s2024.onnx"), LazyThreadSafetyMode.ExecutionAndPublication);
-        private readonly Lazy<InferenceSession> _inferenceJ = new(
-            () => new InferenceSession("DLModels/best_J_s2024.onnx"), LazyThreadSafetyMode.ExecutionAndPublication);
-        private readonly Lazy<InferenceSession> _inferenceK = new(
-            () => new InferenceSession("DLModels/best_K_s2024.onnx"), LazyThreadSafetyMode.ExecutionAndPublication);
-        private readonly Lazy<InferenceSession> _inferenceL = new(
-            () => new InferenceSession("DLModels/best_L_s2024.onnx"), LazyThreadSafetyMode.ExecutionAndPublication);
-
-        /// <summary>最新阶次谱缓存（供诊断使用，volatile 保证跨线程可见性）</summary>
-        private volatile double[] _latestOrderSpectrum;
-        /// <summary>最新时域数据缓存（供诊断使用，volatile 保证跨线程可见性）</summary>
-        private volatile double[] _latestTimeData;
-        /// <summary>CWT 帧计数器（用于节流）</summary>
         private int _cwtFrameCounter;
+        private const int CwtThrottleFrames = 2;
+
+        // 风机运行状态
+        private bool _isFanRunning = true;
+
+        // 叶片不平衡检测器
+        private readonly BladeImbalanceDetector _bladeDetector = new();
+        // 风口堵塞检测器
+        private readonly BlockageDetector _blockageDetector = new();
+        // 螺栓松动检测器 (7×24 运行)
+        private readonly BoltLoosenDetector _boltDetector = new();
+
+        // 图表更新队列（后台线程入队，UI 线程出队执行，确保所有 ScottPlot 操作在 UI 线程）
+        internal readonly System.Collections.Concurrent.ConcurrentQueue<Action> PlotActions = new();
+        internal volatile bool BoltPlotDirty;
+        internal volatile bool BladePlotDirty;
+        internal volatile bool BlockagePlotDirty;
+        internal volatile bool AuxPlotDirty;
+
+        // 中文字体（图例显示用）
+        private readonly string _chineseFont = ScottPlot.Fonts.Detect("测试");
+
+        // 复用的绘图对象（避免 Clear+Add 导致集合修改异常）
+        private Signal? _boltSig;
+        private ScottPlot.Plottables.HorizontalLine? _boltWarnLine;
+        private ScottPlot.Plottables.HorizontalLine? _boltAlarmLine;
+        private ScottPlot.Plottables.HorizontalLine? _boltBaseLine;
+
+        private Signal? _bladeSig;
+        private ScottPlot.Plottables.VerticalLine? _bladeLine1x;
+        private ScottPlot.Plottables.VerticalLine? _bladeLine2x;
+        private ScottPlot.Plottables.HorizontalLine? _bladeEwmaLine;
+        private ScottPlot.Plottables.HorizontalLine? _bladeThreshLine;
+
+        private Signal? _blockageSig;
+        private ScottPlot.Plottables.HorizontalLine? _blockageUpperLine;
+        private ScottPlot.Plottables.HorizontalLine? _blockageLowerLine;
+
+        private ScottPlot.Plottables.Scatter? _auxScatter;
+        private ScottPlot.Plottables.HorizontalLine? _auxRefLine;
 
         #endregion
 
-        #region 绑定属性
+        #region 绑定属性 — 风机信息
 
-        /// <summary>轴承型号列表</summary>
-        [ObservableProperty] private List<BearingInfo> _bearingList = new();
-        /// <summary>当前选中的轴承型号</summary>
-        [ObservableProperty] private BearingInfo _selectedBearing;
-        /// <summary>当前设备转速 (RPM)</summary>
-        [ObservableProperty] private double _rpm = DefaultRpm;
-        /// <summary>故障特征频率计算结果</summary>
-        [ObservableProperty] private BearingFaultResult _faultResult = new();
+        /// <summary>风机编号列表</summary>
+        [ObservableProperty] private List<DeviceInfo> _fanList = new();
+        /// <summary>当前选中的风机</summary>
+        [ObservableProperty] private DeviceInfo _selectedFan;
 
-        /// <summary>是否在图表显示 BPFO 特征线</summary>
-        [ObservableProperty] private bool _showBPFO;
-        /// <summary>是否在图表显示 BPFI 特征线</summary>
-        [ObservableProperty] private bool _showBPFI;
-        /// <summary>是否在图表显示 BSF 特征线</summary>
-        [ObservableProperty] private bool _showBSF;
-        /// <summary>是否在图表显示 FTF 特征线</summary>
-        [ObservableProperty] private bool _showFTF;
-
-        /// <summary>诊断状态/结果提示文本</summary>
-        [ObservableProperty] private string _diagnosisResult = "等待诊断...";
-        /// <summary>是否启用自适应阶次视图</summary>
-        [ObservableProperty] private bool _useAdaptiveOrderView;
-        /// <summary>是否启用自适应包络视图</summary>
-        [ObservableProperty] private bool _useAdaptiveEnvView;
+        /// <summary>运行状态颜色 (Green=运行中, Gray=停机)</summary>
+        [ObservableProperty] private SWM.SolidColorBrush _runStatusColor = new SWM.SolidColorBrush(SWM.Color.FromRgb(0x16, 0xA3, 0x4A));
+        /// <summary>运行状态文本</summary>
+        [ObservableProperty] private string _runStatusText = "运行中";
 
         #endregion
 
-        #region 事件定义
+        #region 绑定属性 — 螺栓松动监测
 
-        /// <summary>纯净时域数据（阶次跟踪后）准备就绪时触发</summary>
-        public event Action<double[]>? OnPureDataReady;
-        /// <summary>原始时域数据准备就绪时触发</summary>
-        public event Action<double[]>? OnRawDataReady;
-        /// <summary>包络谱数据准备就绪时触发</summary>
-        public event Action<SpectrumData>? OnEnvelopeSpectrumReady;
-        /// <summary>阶次谱数据准备就绪时触发</summary>
-        public event Action<SpectrumData>? OnOrderSpectrumReady;
-        /// <summary>连续小波变换(CWT)时频热力图数据准备就绪时触发</summary>
-        public event Action<CwtHeatmapData>? OnCwtHeatmapReady;
+        /// <summary>当前漂移量显示文本</summary>
+        [ObservableProperty] private string _currentDrift = "0.000°";
+        /// <summary>漂移速率显示文本</summary>
+        [ObservableProperty] private string _driftRate = "+0.000°/天";
+        /// <summary>报警状态文本</summary>
+        [ObservableProperty] private string _boltAlarmText = "标定中";
+        /// <summary>报警状态颜色</summary>
+        [ObservableProperty] private SWM.SolidColorBrush _boltAlarmColor = ColorGray;
+        /// <summary>θ_DC 当前值文本</summary>
+        [ObservableProperty] private string _boltTiltText = "0.000°";
+        /// <summary>基线 θ₀ 文本</summary>
+        [ObservableProperty] private string _boltBaselineText = "标定中 (0/200)";
+        /// <summary>温度补偿状态文本</summary>
+        [ObservableProperty] private string _boltTempCompText = "待标定";
+
+        #endregion
+
+        #region 绑定属性 — 叶片不平衡监测
+
+        /// <summary>1×fr 幅值显示文本</summary>
+        [ObservableProperty] private string _amp1Fr = "0.000";
+        /// <summary>谐波比 R21 显示文本</summary>
+        [ObservableProperty] private string _harmonicRatio = "0.00";
+        /// <summary>相位稳定性 σφ 显示文本</summary>
+        [ObservableProperty] private string _phaseStability = "0.0°";
+        /// <summary>EWMA 平滑幅值</summary>
+        [ObservableProperty] private string _ewmaAmplitude = "0.000";
+        /// <summary>报警状态文本</summary>
+        [ObservableProperty] private string _bladeAlarmText = "标定中";
+        /// <summary>报警状态颜色</summary>
+        [ObservableProperty] private SWM.SolidColorBrush _bladeAlarmColor = ColorGray;
+        /// <summary>基线状态文本</summary>
+        [ObservableProperty] private string _baselineStatus = "标定中 (0/30)";
+        /// <summary>连续计数文本</summary>
+        [ObservableProperty] private string _consecutiveText = "0/3";
+
+        #endregion
+
+        #region 绑定属性 — 风口堵塞预警
+
+        /// <summary>超限持续时间文本</summary>
+        [ObservableProperty] private string _exceedDurationText = "超限持续时间: 0s / 60s";
+        /// <summary>超限持续当前值</summary>
+        [ObservableProperty] private double _exceedDurationValue = 0;
+        /// <summary>超限最大值</summary>
+        [ObservableProperty] private double _exceedDurationMax = 60;
+        /// <summary>进度条颜色</summary>
+        [ObservableProperty] private SWM.SolidColorBrush _exceedDurationColor = new SWM.SolidColorBrush(SWM.Color.FromRgb(0x16, 0xA3, 0x4A));
+        /// <summary>报警状态文本</summary>
+        [ObservableProperty] private string _blockageAlarmText = "标定中";
+        /// <summary>报警状态颜色</summary>
+        [ObservableProperty] private SWM.SolidColorBrush _blockageAlarmColor = ColorGray;
+        /// <summary>电流 RMS 显示文本</summary>
+        [ObservableProperty] private string _blockageRmsText = "0.000";
+        /// <summary>ΔI 偏差值文本</summary>
+        [ObservableProperty] private string _blockageDeltaIText = "0.00";
+        /// <summary>基线状态文本</summary>
+        [ObservableProperty] private string _blockageBaselineText = "标定中 (0/720)";
+        /// <summary>连续计数文本</summary>
+        [ObservableProperty] private string _blockageConsecutiveText = "0/3";
+
+        #endregion
+
+        #region 绑定属性 — 辅助验证
+
+        /// <summary>环境温度显示文本</summary>
+        [ObservableProperty] private string _ambientTemp = "25.0 °C";
+        /// <summary>温度补偿状态</summary>
+        [ObservableProperty] private string _tempCompStatus = "已补偿";
+
+        #endregion
+
+        #region 绑定属性 — 诊断状态
+
+        [ObservableProperty] private string _diagnosisResult = "等待数据...";
+
+        #endregion
+
+        #region 图表脏标记（驱动 UI 刷新）
+
+        [ObservableProperty] private bool _boltMonitorDirty;
+        [ObservableProperty] private bool _bladeMonitorDirty;
+        [ObservableProperty] private bool _blockageMonitorDirty;
+        [ObservableProperty] private bool _auxMonitorDirty;
+
+        #endregion
+
+        #region 事件定义（传感器数据就绪）
+
+        /// <summary>振动加速度数据就绪</summary>
+        public event Action<double[]>? OnVibrationDataReady;
+        /// <summary>电流数据就绪</summary>
+        public event Action<double[]>? OnCurrentDataReady;
+        /// <summary>倾角数据就绪</summary>
+        public event Action<double[]>? OnTiltDataReady;
 
         #endregion
 
         #region 图表实例
 
-        /// <summary>诊断置信度柱状图实例（ScottPlot 5）</summary>
-        public Plot BarPlot { get; } = new();
+        /// <summary>螺栓松动监测图 (由 View 绑定为 WpfPlot 的实际 Plot)</summary>
+        public Plot BoltMonitorPlot { get; set; } = new();
+        /// <summary>叶片不平衡监测图</summary>
+        public Plot BladeMonitorPlot { get; set; } = new();
+        /// <summary>风口堵塞预警图</summary>
+        public Plot BlockageMonitorPlot { get; set; } = new();
+        /// <summary>辅助验证图</summary>
+        public Plot AuxMonitorPlot { get; set; } = new();
+
+        /// <summary>
+        /// 将 View 中 WpfPlot 控件的内部 Plot 实例绑定到 ViewModel
+        /// 必须在 View.Loaded 中调用，否则 ViewModel 绘制的数据无法显示
+        /// </summary>
+        public void BindPlots(Plot bolt, Plot blade, Plot blockage, Plot aux)
+        {
+            BoltMonitorPlot = bolt;
+            BladeMonitorPlot = blade;
+            BlockageMonitorPlot = blockage;
+            AuxMonitorPlot = aux;
+            InitPlots();
+        }
 
         #endregion
 
         #region 构造函数与初始化
 
-        /// <summary>
-        /// 初始化深度学习诊断视图模型
-        /// </summary>
         public DeepDiagnosisViewModel(IDeepDiagnosisService deepDiagnosisService, ISensorDataService sensorDataService)
         {
             _deepDiagnosisService = deepDiagnosisService;
@@ -141,66 +238,72 @@ namespace BearingFaultDiagnosis.ViewModels
 
             _overlapSize = ChunkSize / OverlapDivisor;
 
-            // 启动后台数据处理循环
             _ = Task.Run(() => ProcessLoopAsync(_cts.Token));
-            // 异步加载轴承列表
-            _ = LoadBearingListAsync();
+            _ = LoadFanListAsync();
+
+            // InitPlots() 由 View.Loaded 中调用 BindPlots() 触发
         }
 
-        /// <summary>传感器元数据更新回调</summary>
+        private void InitPlots()
+        {
+            // 仅设置图例，阈值线/参考线由 Update*Monitor 每帧动态绘制
+            var boltLeg = BoltMonitorPlot.ShowLegend(Alignment.UpperRight);
+            boltLeg.FontName = _chineseFont;
+            var bladeLeg = BladeMonitorPlot.ShowLegend(Alignment.UpperRight);
+            bladeLeg.FontName = _chineseFont;
+        }
+
         private void OnSensorMetadataUpdated(PuMetadata meta)
         {
-            if (meta.rpm > 0) Rpm = meta.rpm;
+            // 根据传感器元数据更新运行状态
+            _isFanRunning = meta.rpm > 100; // 简单判定
+            RunStatusColor = _isFanRunning
+                ? new SWM.SolidColorBrush(SWM.Color.FromRgb(0x16, 0xA3, 0x4A))
+                : new SWM.SolidColorBrush(SWM.Color.FromRgb(0x94, 0xA3, 0xB8));
+            RunStatusText = _isFanRunning ? "运行中" : "停机";
         }
 
-        /// <summary>异步加载轴承型号列表</summary>
-        private async Task LoadBearingListAsync()
+        private async Task LoadFanListAsync()
         {
             try
             {
-                var list = await _deepDiagnosisService.GetBearingListAsync();
-                BearingList = list;
-                if (list.Count > 0) SelectedBearing = list[0];
+                // 复用 DeviceInfo 作为风机列表的实体
+                // 实际项目中可创建专门的 FanInfo 实体
+                var list = new List<DeviceInfo>
+                {
+                    new() { Id = 1, DeviceCode = "FAN-001", DeviceName = "隧道A-01号风机", InstallLocation = "隧道A" },
+                    new() { Id = 2, DeviceCode = "FAN-002", DeviceName = "隧道A-02号风机", InstallLocation = "隧道A" },
+                    new() { Id = 3, DeviceCode = "FAN-003", DeviceName = "隧道B-01号风机", InstallLocation = "隧道B" },
+                };
+                FanList = list;
+                if (list.Count > 0) SelectedFan = list[0];
             }
             catch (Exception ex)
             {
-                DiagnosisResult = $"加载轴承列表失败：{ex.Message}";
+                DiagnosisResult = $"加载风机列表失败：{ex.Message}";
             }
         }
 
         #endregion
 
-        #region 属性变更与频率计算
+        #region 属性变更
 
-        partial void OnSelectedBearingChanged(BearingInfo value) => RecalcFaultFrequencies();
-        partial void OnRpmChanged(double value) => RecalcFaultFrequencies();
-        partial void OnShowBPFOChanged(bool value) => RecalcFaultFrequencies();
-        partial void OnShowBPFIChanged(bool value) => RecalcFaultFrequencies();
-        partial void OnShowBSFChanged(bool value) => RecalcFaultFrequencies();
-        partial void OnShowFTFChanged(bool value) => RecalcFaultFrequencies();
-
-        /// <summary>根据当前轴承参数与转速重新计算故障特征频率</summary>
-        private void RecalcFaultFrequencies()
+        partial void OnSelectedFanChanged(DeviceInfo value)
         {
-            if (SelectedBearing != null)
-                FaultResult = _deepDiagnosisService.CalculateFaultFrequencies(SelectedBearing, Rpm);
+            if (value != null)
+                DiagnosisResult = $"已选择 {value.DeviceName}";
         }
 
         #endregion
 
-        #region 核心数据处理循环 (后台任务)
+        #region 核心数据处理循环
 
-        /// <summary>
-        /// 连续数据流处理主循环（运行于后台线程）
-        /// 负责：数据收集 -> 重叠缓冲 -> 阶次跟踪 -> 频谱/CWT计算 -> 事件推送
-        /// </summary>
         private async Task ProcessLoopAsync(CancellationToken ct)
         {
             while (!ct.IsCancellationRequested)
             {
                 try
                 {
-                    // 1. 收集数据至满足 ChunkSize
                     int samplesNeeded = ChunkSize - _currentCount;
                     int collected = 0;
 
@@ -213,7 +316,6 @@ namespace BearingFaultDiagnosis.ViewModels
                         }
                         else
                         {
-                            // 队列空时让出时间片，避免空转消耗 CPU
                             await Task.Delay(10, ct);
                         }
                     }
@@ -221,68 +323,40 @@ namespace BearingFaultDiagnosis.ViewModels
                     if (ct.IsCancellationRequested) break;
                     _currentCount += collected;
 
-                    // 2. 复制当前帧原始数据并触发事件
+                    // 复制振动数据
                     double[] rawDataCopy = new double[ChunkSize];
                     Array.Copy(_buffer, rawDataCopy, ChunkSize);
-                    OnRawDataReady?.Invoke(rawDataCopy);
-                    _latestTimeData = rawDataCopy; // 缓存供 UI 诊断使用
+                    OnVibrationDataReady?.Invoke(rawDataCopy);
 
-                    // 3. 获取实时工况参数
-                    double rpm = _sensorDataService.puMetadata.rpm > 0 ? _sensorDataService.puMetadata.rpm : DefaultRpm;
-                    double fs = _sensorDataService.puMetadata.sample_rate > 0 ? _sensorDataService.puMetadata.sample_rate : DefaultSampleRate;
+                    double fs = (_sensorDataService.puMetadata?.sample_rate ?? 0) > 0
+                        ? _sensorDataService.puMetadata!.sample_rate
+                        : DefaultSampleRate;
 
-                    // 4. 阶次跟踪处理（等角度重采样）
-                    double[] pureData = _deepDiagnosisService.ProcessChunk(_buffer, fs, rpm, TargetSpr);
-                    OnPureDataReady?.Invoke(pureData);
+                    // 生成模拟电流数据（实际项目从传感器获取）
+                    double[] currentData = GenerateSimulatedCurrent(rawDataCopy);
+                    OnCurrentDataReady?.Invoke(currentData);
 
-                    // 5. 计算包络谱（基于原始时域）
-                    double[] envSpectrum = _deepDiagnosisService.ComputeSpectrum(rawDataCopy);
-                    OnEnvelopeSpectrumReady?.Invoke(new SpectrumData
-                    {
-                        Magnitudes = envSpectrum,
-                        Resolution = fs / ChunkSize
-                    });
+                    // 生成模拟倾角数据
+                    double[] tiltData = GenerateSimulatedTilt(rawDataCopy);
+                    OnTiltDataReady?.Invoke(tiltData);
 
-                    // 6. 计算阶次谱（基于阶次跟踪后数据）
-                    double[] orderSpectrum = _deepDiagnosisService.ComputeSpectrum(pureData);
-                    _latestOrderSpectrum = orderSpectrum; // 缓存供 UI 诊断使用
+                    // 更新算法卡片数据
+                    UpdateBoltMonitor(tiltData);
+                    UpdateBladeMonitor(rawDataCopy, fs);
+                    UpdateBlockageMonitor(currentData);
+                    UpdateAuxMonitor(rawDataCopy, fs);
 
-                    double orderRes = pureData.Length > 0 ? (double)TargetSpr / pureData.Length : 1.0;
-                    OnOrderSpectrumReady?.Invoke(new SpectrumData
-                    {
-                        Magnitudes = orderSpectrum,
-                        Resolution = orderRes
-                    });
-
-                    // 7. CWT 时频热力图（节流计算，降低性能开销）
-                    _cwtFrameCounter++;
-                    if (_cwtFrameCounter % CwtThrottleFrames == 0)
-                    {
-                        double[] cwtMatrix = _deepDiagnosisService.ComputeCWT(
-                            rawDataCopy, fs, 50.0, 16000.0, 128, 512);
-
-                        OnCwtHeatmapReady?.Invoke(new CwtHeatmapData
-                        {
-                            Matrix = cwtMatrix,
-                            NumScales = 128,
-                            NumTimeBins = 512,
-                            FreqLow = 50.0,
-                            FreqHigh = 16000.0
-                        });
-                    }
-
-                    // 8. 重叠保留法：将尾部数据移至头部，作为下一帧的起始重叠区
+                    // 重叠保留
                     Array.Copy(_buffer, ChunkSize - _overlapSize, _buffer, 0, _overlapSize);
                     _currentCount = _overlapSize;
                 }
                 catch (OperationCanceledException)
                 {
-                    break; // 正常退出
+                    break;
                 }
                 catch (Exception ex)
                 {
-                    // 记录日志（建议接入 ILogger），短暂休眠后继续，防止单帧异常中断数据流
-                    System.Diagnostics.Debug.WriteLine($"[ProcessLoop] 数据处理异常: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[ProcessLoop] 异常: {ex.Message}");
                     await Task.Delay(50, ct);
                 }
             }
@@ -290,234 +364,425 @@ namespace BearingFaultDiagnosis.ViewModels
 
         #endregion
 
-        #region 深度学习诊断逻辑
+        #region 模拟传感器数据生成
 
-        /// <summary>
-        /// 执行双分支（时域+阶次谱）集成诊断命令
-        /// </summary>
-        [RelayCommand]
-        public async Task ExecuteDualBranchDiagnosis()
+        private double[] GenerateSimulatedCurrent(double[] vibrationData)
         {
-            try
+            // 根据振动数据模拟电流信号（实际项目中电流由专用传感器采集）
+            double[] current = new double[Math.Min(vibrationData.Length, 1024)];
+            double rms = Math.Sqrt(vibrationData.Take(1024).Average(v => v * v));
+            double baseCurrent = 15.0; // 额定电流约 15A
+            for (int i = 0; i < current.Length; i++)
             {
-                DiagnosisResult = "正在诊断...";
-
-                // 1. 准备时域分支输入 (2048点)
-                float[] timeData = new float[TimeDataLength];
-                if (_latestTimeData != null && _latestTimeData.Length >= TimeDataLength)
-                {
-                    for (int i = 0; i < TimeDataLength; i++)
-                        timeData[i] = (float)_latestTimeData[i];
-                }
-                else
-                {
-                    DiagnosisResult = "时域数据尚未准备好，请稍后重试";
-                    return;
-                }
-
-                // 2. 准备频谱分支输入 (1024点)
-                float[] specData = new float[SpecDataLength];
-                if (_latestOrderSpectrum != null)
-                {
-                    for (int i = 0; i < SpecDataLength && i < _latestOrderSpectrum.Length; i++)
-                        specData[i] = (float)_latestOrderSpectrum[i];
-                }
-                else
-                {
-                    DiagnosisResult = "谱数据尚未准备好，请稍后重试";
-                    return;
-                }
-
-                // 3. 并行执行四个子模型推理
-                var tasks = new[]
-                {
-                    Task.Run(() => RunSingleModel(_inferenceI.Value, timeData, specData)),
-                    Task.Run(() => RunSingleModel(_inferenceJ.Value, timeData, specData)),
-                    Task.Run(() => RunSingleModel(_inferenceK.Value, timeData, specData)),
-                    Task.Run(() => RunSingleModel(_inferenceL.Value, timeData, specData))
-                };
-
-                float[][] allResults = await Task.WhenAll(tasks);
-
-                // 4. 软投票融合（概率平均）
-                int numClasses = allResults[0].Length;
-                float[] finalProbs = new float[numClasses];
-                for (int i = 0; i < numClasses; i++)
-                {
-                    finalProbs[i] = (allResults[0][i] + allResults[1][i] + allResults[2][i] + allResults[3][i]) / 4.0f;
-                }
-
-                // 5. 更新 UI 柱状图
-                SetBars(ClassLabels, finalProbs, new double[] { 1, 2, 3 });
-
-                // 6. 根据最高置信度自动勾选对应故障参考线（先确保频率基于当前转速计算）
-                RecalcFaultFrequencies();
-                int maxIdx = Array.IndexOf(finalProbs, finalProbs.Max());
-                switch (maxIdx)
-                {
-                    case 0: // 正常状态 — 全部取消
-                        ShowBPFO = false;
-                        ShowBPFI = false;
-                        ShowBSF = false;
-                        ShowFTF = false;
-                        break;
-                    case 1: // 内圈早期损伤 → 勾选 BPFI
-                        ShowBPFI = true;
-                        ShowBPFO = false;
-                        ShowBSF = false;
-                        ShowFTF = false;
-                        break;
-                    case 2: // 外圈早期损伤 → 勾选 BPFO
-                        ShowBPFO = true;
-                        ShowBPFI = false;
-                        ShowBSF = false;
-                        ShowFTF = false;
-                        break;
-                }
-
-                DiagnosisResult = "诊断完成";
+                current[i] = baseCurrent + rms * 2.0 * Math.Sin(2 * Math.PI * 50 * i / DefaultSampleRate)
+                    + (Random.Shared.NextDouble() - 0.5) * 0.5;
             }
-            catch (Exception ex)
-            {
-                DiagnosisResult = $"诊断失败：{ex.Message}";
-            }
+            return current;
         }
 
-        /// <summary>
-        /// 运行单个 ONNX 模型进行推理
-        /// </summary>
-        /// <param name="session">ONNX 推理会话</param>
-        /// <param name="timeData">时域输入张量数据</param>
-        /// <param name="specData">频谱输入张量数据</param>
-        /// <returns>各类别预测概率数组</returns>
-        private float[] RunSingleModel(InferenceSession session, float[] timeData, float[] specData)
+        private double[] GenerateSimulatedTilt(double[] vibrationData)
         {
-            var timeTensor = new DenseTensor<float>(timeData, new[] { 1, 1, TimeDataLength });
-            var specTensor = new DenseTensor<float>(specData, new[] { 1, 1, SpecDataLength });
-
-            // 动态匹配 ONNX 模型输入节点名称（增强兼容性）
-            var inputNames = session.InputMetadata.Keys.ToList();
-            string timeInputName = inputNames.FirstOrDefault(k => k.Contains("time") || k.Contains("x_time")) ?? "x_time";
-            string specInputName = inputNames.FirstOrDefault(k => k.Contains("spec") || k.Contains("x_spec")) ?? "x_spec";
-
-            // 兜底逻辑：若未匹配到预期名称，则按定义顺序赋值
-            if (inputNames.Count >= 2 && !inputNames.Contains(timeInputName))
+            // 模拟倾角数据（含低频漂移）
+            double[] tilt = new double[Math.Min(vibrationData.Length / 64, 500)];
+            double baseTilt = 0.05;
+            for (int i = 0; i < tilt.Length; i++)
             {
-                timeInputName = inputNames[0];
-                specInputName = inputNames[1];
+                double drift = 0.02 * Math.Sin(2 * Math.PI * i / tilt.Length);
+                double noise = (Random.Shared.NextDouble() - 0.5) * 0.02;
+                tilt[i] = baseTilt + drift + noise;
             }
-
-            var inputs = new List<NamedOnnxValue>
-            {
-                NamedOnnxValue.CreateFromTensor(timeInputName, timeTensor),
-                NamedOnnxValue.CreateFromTensor(specInputName, specTensor)
-            };
-
-            using var results = session.Run(inputs);
-            return results.First().AsEnumerable<float>().ToArray();
+            return tilt;
         }
 
         #endregion
 
-        #region 图表渲染逻辑
+        #region 算法卡片更新
+
+        private void UpdateBoltMonitor(double[] tiltData)
+        {
+            if (tiltData.Length < 2) return;
+
+            // 注意：螺栓松动监测 7×24 运行，不检查 _isFanRunning
+
+            // 生成模拟温度 (与 UpdateAuxMonitor 一致)
+            double temperature = 25.0 + Random.Shared.NextDouble() * 3;
+
+            // 调用检测器
+            var result = _boltDetector.Process(tiltData, temperature);
+
+            // 更新绑定属性
+            CurrentDrift = $"{result.DriftDelta:F3}°";
+            DriftRate = $"{result.DriftRate:+0.000;-0.000}°/天";
+            BoltTiltText = $"{result.ThetaDc:F4}°";
+
+            // 基线状态
+            if (!result.IsCalibrated)
+                BoltBaselineText = $"标定中 ({result.CalibrationCount}/{_boltDetector.CalibrationPeriodsRequired})";
+            else
+                BoltBaselineText = $"θ₀={result.BaselineTheta0:F4}°";
+
+            // 温度补偿状态
+            BoltTempCompText = result.IsTempCompensationActive
+                ? $"a={result.TempCoeffA:F4} b={result.TempCoeffB:F4}"
+                : "待标定";
+
+            // 报警状态颜色映射
+            (BoltAlarmText, BoltAlarmColor) = result.AlarmState switch
+            {
+                BoltAlarmState.Normal      => ("正常",   ColorGreen),
+                BoltAlarmState.Calibrating => ("标定中", ColorGray),
+                BoltAlarmState.Warning     => ("预警",   ColorOrange),
+                BoltAlarmState.Alarm       => ("报警!",  ColorRed),
+                _ => ("未知", ColorGray)
+            };
+
+            // 图表更新：入队，由 UI 线程统一执行（确保 ScottPlot 无线程安全问题）
+            var capturedTiltData = tiltData;
+            var capturedResult = result;
+            PlotActions.Enqueue(() =>
+            {
+                if (_boltSig == null)
+                {
+                    _boltSig = BoltMonitorPlot.Add.Signal(capturedTiltData);
+                    _boltSig.Label = "θ_DC 趋势";
+                    _boltSig.Color = ScottPlot.Color.FromHex("#8E44AD");
+                }
+                else
+                {
+                    _boltSig.Data = new SignalSourceDouble(capturedTiltData, 1.0);
+                }
+
+                double warnLevel = capturedResult.BaselineTheta0 + BoltLoosenDetector.WarnThresholdDeg;
+                double alarmLevel = capturedResult.BaselineTheta0 + BoltLoosenDetector.AlarmThresholdDeg;
+
+                if (_boltWarnLine == null)
+                {
+                    _boltWarnLine = BoltMonitorPlot.Add.HorizontalLine(warnLevel);
+                    _boltWarnLine.LineStyle.Color = ScottPlot.Color.FromHex("#F39C12");
+                    _boltWarnLine.LineStyle.Width = 1.5f;
+                    _boltWarnLine.LineStyle.Pattern = LinePattern.Dashed;
+                    _boltWarnLine.LabelStyle.Text = $"预警 {BoltLoosenDetector.WarnThresholdDeg}°";
+                }
+                else { _boltWarnLine.Y = warnLevel; }
+
+                if (_boltAlarmLine == null)
+                {
+                    _boltAlarmLine = BoltMonitorPlot.Add.HorizontalLine(alarmLevel);
+                    _boltAlarmLine.LineStyle.Color = ScottPlot.Color.FromHex("#E74C3C");
+                    _boltAlarmLine.LineStyle.Width = 1.5f;
+                    _boltAlarmLine.LineStyle.Pattern = LinePattern.Dashed;
+                    _boltAlarmLine.LabelStyle.Text = $"报警 {BoltLoosenDetector.AlarmThresholdDeg}°";
+                }
+                else { _boltAlarmLine.Y = alarmLevel; }
+
+                if (capturedResult.IsCalibrated)
+                {
+                    if (_boltBaseLine == null)
+                    {
+                        _boltBaseLine = BoltMonitorPlot.Add.HorizontalLine(capturedResult.BaselineTheta0);
+                        _boltBaseLine.LineStyle.Color = ScottPlot.Color.FromHex("#27AE60");
+                        _boltBaseLine.LineStyle.Width = 1f;
+                        _boltBaseLine.LineStyle.Pattern = LinePattern.Dotted;
+                        _boltBaseLine.LabelStyle.Text = "θ₀";
+                    }
+                    else { _boltBaseLine.Y = capturedResult.BaselineTheta0; _boltBaseLine.IsVisible = true; }
+                }
+                else if (_boltBaseLine != null) { _boltBaseLine.IsVisible = false; }
+
+                var boltLegend = BoltMonitorPlot.ShowLegend(Alignment.UpperRight);
+                boltLegend.FontName = _chineseFont;
+                BoltMonitorPlot.Axes.AutoScale();
+            });
+            BoltPlotDirty = true;
+        }
+
+        private void UpdateBladeMonitor(double[] vibrationData, double fs)
+        {
+            // 风机停机时跳过叶片不平衡检测
+            if (!_isFanRunning) return;
+
+            // 1. 使用 C++ FFT 计算频谱
+            double[] spectrum = _deepDiagnosisService.ComputeSpectrum(vibrationData);
+            if (spectrum.Length < 20) return;
+
+            // 2. 调用检测器 (所有状态管理在 BladeImbalanceDetector 内部)
+            var result = _bladeDetector.Process(spectrum, vibrationData, fs);
+
+            // 3. 更新绑定属性
+            Amp1Fr = $"{result.Amplitude1x:F4}";
+            HarmonicRatio = $"{result.HarmonicRatioR21:F2}";
+            PhaseStability = $"{result.PhaseStdDev:F1}°";
+            EwmaAmplitude = $"{result.EwmaAmplitude:F4}";
+            ConsecutiveText = $"{result.ConsecutiveCount}/{result.ConsecutiveRequired}";
+
+            // 4. 基线状态
+            if (!result.IsCalibrated)
+                BaselineStatus = $"标定中 ({result.CalibrationCount}/{_bladeDetector.CalibrationPeriodsRequired})";
+            else
+                BaselineStatus = $"μ={result.BaselineMean:F4} σ={result.BaselineStdDev:F4}";
+
+            // 5. 报警状态颜色映射
+            (BladeAlarmText, BladeAlarmColor) = result.AlarmState switch
+            {
+                BladeAlarmState.Normal      => ("正常",   ColorGreen),
+                BladeAlarmState.Calibrating => ("标定中", ColorGray),
+                BladeAlarmState.Watch       => ("观察",   ColorYellow),
+                BladeAlarmState.Warning     => ("预警",   ColorOrange),
+                BladeAlarmState.Alarm       => ("报警!",  ColorRed),
+                _ => ("未知", ColorGray)
+            };
+
+            // 6. 图表更新：入队，由 UI 线程统一执行
+            var capturedSpectrum = spectrum;
+            var capturedFs = fs;
+            var capturedBladeResult = result;
+            PlotActions.Enqueue(() =>
+            {
+                if (_bladeSig == null)
+                {
+                    _bladeSig = BladeMonitorPlot.Add.Signal(capturedSpectrum);
+                    _bladeSig.Label = "FFT 频谱";
+                    _bladeSig.Data.Period = capturedFs / ChunkSize;
+                }
+                else
+                {
+                    _bladeSig.Data = new SignalSourceDouble(capturedSpectrum, capturedFs / ChunkSize);
+                }
+
+                double fr = RatedRpmHz;
+                double xMax = fr * 4;
+
+                if (_bladeLine1x == null)
+                {
+                    _bladeLine1x = BladeMonitorPlot.Add.VerticalLine(fr);
+                    _bladeLine1x.LineStyle.Color = ScottPlot.Color.FromHex("#3498DB");
+                    _bladeLine1x.LineStyle.Width = 1.5f;
+                    _bladeLine1x.LineStyle.Pattern = LinePattern.Dashed;
+                    _bladeLine1x.LabelStyle.Text = $"1×fr ({fr:F1}Hz)";
+                }
+                else { _bladeLine1x.X = fr; }
+
+                if (_bladeLine2x == null)
+                {
+                    _bladeLine2x = BladeMonitorPlot.Add.VerticalLine(fr * 2);
+                    _bladeLine2x.LineStyle.Color = ScottPlot.Color.FromHex("#E74C3C");
+                    _bladeLine2x.LineStyle.Width = 1.5f;
+                    _bladeLine2x.LineStyle.Pattern = LinePattern.Dashed;
+                    _bladeLine2x.LabelStyle.Text = $"2×fr ({fr * 2:F1}Hz)";
+                }
+                else { _bladeLine2x.X = fr * 2; }
+
+                if (capturedBladeResult.EwmaAmplitude > 0)
+                {
+                    if (_bladeEwmaLine == null)
+                    {
+                        _bladeEwmaLine = BladeMonitorPlot.Add.HorizontalLine(capturedBladeResult.EwmaAmplitude);
+                        _bladeEwmaLine.LineStyle.Color = ScottPlot.Color.FromHex("#27AE60");
+                        _bladeEwmaLine.LineStyle.Width = 1f;
+                        _bladeEwmaLine.LabelStyle.Text = "EWMA";
+                    }
+                    else { _bladeEwmaLine.Y = capturedBladeResult.EwmaAmplitude; _bladeEwmaLine.IsVisible = true; }
+                }
+                else if (_bladeEwmaLine != null) { _bladeEwmaLine.IsVisible = false; }
+
+                if (capturedBladeResult.IsCalibrated)
+                {
+                    if (_bladeThreshLine == null)
+                    {
+                        _bladeThreshLine = BladeMonitorPlot.Add.HorizontalLine(capturedBladeResult.Threshold);
+                        _bladeThreshLine.LineStyle.Color = ScottPlot.Color.FromHex("#E74C3C");
+                        _bladeThreshLine.LineStyle.Width = 1f;
+                        _bladeThreshLine.LineStyle.Pattern = LinePattern.Dashed;
+                        _bladeThreshLine.LabelStyle.Text = "μ+3σ";
+                    }
+                    else { _bladeThreshLine.Y = capturedBladeResult.Threshold; _bladeThreshLine.IsVisible = true; }
+                }
+                else if (_bladeThreshLine != null) { _bladeThreshLine.IsVisible = false; }
+
+                var bladeLegend = BladeMonitorPlot.ShowLegend(Alignment.UpperRight);
+                bladeLegend.FontName = _chineseFont;
+                BladeMonitorPlot.Axes.SetLimitsX(0, xMax);
+                BladeMonitorPlot.Axes.AutoScaleY();
+            });
+            BladePlotDirty = true;
+        }
+
+        private void UpdateBlockageMonitor(double[] currentData)
+        {
+            if (currentData.Length < 2) return;
+
+            // 1. 计算实际监测周期 (ProcessLoop 迭代周期)
+            double monitoringPeriod = (double)_overlapSize / DefaultSampleRate;
+
+            // 2. 调用检测器
+            var result = _blockageDetector.Process(currentData, DefaultSampleRate, monitoringPeriod);
+
+            // 3. 更新绑定属性
+            BlockageRmsText = $"{result.CurrentRms:F3}";
+            BlockageDeltaIText = $"{result.DeviationDeltaI:F2}";
+            BlockageConsecutiveText = $"{result.ConsecutiveCount}/{result.ConsecutiveRequired}";
+
+            // 4. 基线状态
+            if (!result.IsCalibrated)
+                BlockageBaselineText = $"标定中 ({result.CalibrationCount}/{_blockageDetector.CalibrationPeriodsRequired})";
+            else
+                BlockageBaselineText = $"μ={result.BaselineMean:F3} σ={result.BaselineStdDev:F3}";
+
+            // 5. 报警状态颜色映射
+            (BlockageAlarmText, BlockageAlarmColor) = result.AlarmState switch
+            {
+                BlockageAlarmState.Normal      => ("正常",   ColorGreen),
+                BlockageAlarmState.Calibrating => ("标定中", ColorGray),
+                BlockageAlarmState.Warning     => ("预警",   ColorOrange),
+                BlockageAlarmState.Alarm       => ("报警!",  ColorRed),
+                _ => ("未知", ColorGray)
+            };
+
+            // 6. 进度条（由检测器驱动）
+            ExceedDurationValue = Math.Min(result.ExceedDurationSeconds, 60.0);
+            ExceedDurationMax = 60.0;
+            ExceedDurationText = $"超限持续时间: {result.ExceedDurationSeconds:F0}s / 60s";
+            ExceedDurationColor = result.AlarmState switch
+            {
+                BlockageAlarmState.Alarm   => ColorRed,
+                BlockageAlarmState.Warning => ColorOrange,
+                _                          => ColorGreen
+            };
+
+            // 7. 图表更新：入队，由 UI 线程统一执行
+            var capturedCurrentData = currentData;
+            var capturedBlockageResult = result;
+            PlotActions.Enqueue(() =>
+            {
+                double mu = capturedBlockageResult.IsCalibrated ? capturedBlockageResult.BaselineMean : 15.0;
+                double sigma = capturedBlockageResult.IsCalibrated ? capturedBlockageResult.BaselineStdDev : 0.5;
+                if (sigma < 1e-9) sigma = 0.5;
+                var normalizedData = capturedCurrentData.Select(v => (v - mu) / sigma).ToArray();
+
+                if (_blockageSig == null)
+                {
+                    _blockageSig = BlockageMonitorPlot.Add.Signal(normalizedData);
+                    _blockageSig.Label = "ΔI 归一化偏差";
+                    _blockageSig.Color = ScottPlot.Color.FromHex("#E67E22");
+                }
+                else
+                {
+                    _blockageSig.Data = new SignalSourceDouble(normalizedData, 1.0);
+                }
+
+                if (_blockageUpperLine == null)
+                {
+                    _blockageUpperLine = BlockageMonitorPlot.Add.HorizontalLine(3.0);
+                    _blockageUpperLine.LineStyle.Color = ScottPlot.Color.FromHex("#E74C3C");
+                    _blockageUpperLine.LineStyle.Width = 1.5f;
+                    _blockageUpperLine.LineStyle.Pattern = LinePattern.Dashed;
+
+                    _blockageLowerLine = BlockageMonitorPlot.Add.HorizontalLine(-3.0);
+                    _blockageLowerLine!.LineStyle.Color = ScottPlot.Color.FromHex("#E74C3C");
+                    _blockageLowerLine.LineStyle.Width = 1.5f;
+                    _blockageLowerLine.LineStyle.Pattern = LinePattern.Dashed;
+                }
+
+                BlockageMonitorPlot.Axes.AutoScale();
+            });
+            BlockagePlotDirty = true;
+        }
+
+        private void UpdateAuxMonitor(double[] vibrationData, double fs)
+        {
+            // 计算振动峭度作为辅助特征
+            double mean = vibrationData.Average();
+            double variance = vibrationData.Average(v => (v - mean) * (v - mean));
+            double kurtosis = variance > 0
+                ? vibrationData.Average(v => Math.Pow((v - mean) / Math.Sqrt(variance), 4))
+                : 3.0;
+
+            AmbientTemp = $"{25.0 + Random.Shared.NextDouble() * 3:F1} °C";
+            TempCompStatus = kurtosis > 3.5 ? "补偿激活" : "已补偿";
+
+            // 更新辅助验证图：入队，由 UI 线程统一执行
+            PlotActions.Enqueue(() =>
+            {
+                double[] tempRange = Enumerable.Range(0, 50).Select(i => 22.0 + i * 0.2).ToArray();
+                double[] tiltDrift = tempRange.Select(t => 0.01 * (t - 25) + (Random.Shared.NextDouble() - 0.5) * 0.02).ToArray();
+
+                if (_auxScatter == null)
+                {
+                    _auxScatter = AuxMonitorPlot.Add.Scatter(tempRange, tiltDrift);
+                    _auxScatter.Label = "温度 vs 倾角零偏";
+                    _auxScatter.Color = ScottPlot.Color.FromHex("#1ABC9C");
+                    _auxScatter.LineStyle.Width = 1.5f;
+
+                    _auxRefLine = AuxMonitorPlot.Add.HorizontalLine(0);
+                    _auxRefLine.LineStyle.Color = ScottPlot.Color.FromHex("#999");
+                    _auxRefLine.LineStyle.Width = 1;
+
+                    var auxLegend = AuxMonitorPlot.ShowLegend();
+                    auxLegend.FontName = _chineseFont;
+                }
+                else
+                {
+                    AuxMonitorPlot.Remove(_auxScatter);
+                    _auxScatter = AuxMonitorPlot.Add.Scatter(tempRange, tiltDrift);
+                    _auxScatter.Label = "温度 vs 倾角零偏";
+                    _auxScatter.Color = ScottPlot.Color.FromHex("#1ABC9C");
+                    _auxScatter.LineStyle.Width = 1.5f;
+                }
+
+                AuxMonitorPlot.Axes.AutoScale();
+            });
+            AuxPlotDirty = true;
+        }
+
+        #endregion
+
+        #region 命令
 
         /// <summary>
-        /// 绘制诊断置信度柱状图
+        /// 执行基线标定命令
         /// </summary>
-        /// <param name="labels">X轴分类标签</param>
-        /// <param name="values">原始概率值</param>
-        /// <param name="positions">柱状图 X 轴位置</param>
-        private void SetBars(string[] labels, float[] values, double[] positions)
+        [RelayCommand]
+        public async Task ExecuteCalibration()
         {
-            if (labels == null || values == null || positions == null)
-                throw new ArgumentNullException();
-            if (labels.Length != values.Length || labels.Length != positions.Length)
-                throw new ArgumentException("标签、值与位置数组长度必须一致");
-
-            BarPlot.Clear();
-
-            // 1. 数据归一化至 [0, 1] 区间
-            float min = values.Min();
-            float max = values.Max();
-            float range = max - min;
-            double[] normalizedValues = Math.Abs(range) < 0.0001f
-                ? values.Select(_ => 1.0).ToArray()
-                : values.Select(v => (double)((v - min) / range)).ToArray();
-
-            // 2. 计算等间距 X 轴坐标
-            double[] spacedPositions = new double[positions.Length];
-            for (int i = 0; i < positions.Length; i++)
-                spacedPositions[i] = 1.0 + i * 1.8;
-
-            var barPlotObj = BarPlot.Add.Bars(spacedPositions, normalizedValues);
-
-            // 3. 设置柱体颜色
-            ScottPlot.Color[] colors =
+            try
             {
-                ScottPlot.Color.FromHex("#4E79A7"),
-                ScottPlot.Color.FromHex("#F28E2B"),
-                ScottPlot.Color.FromHex("#E15759"),
-                ScottPlot.Color.FromHex("#76B7B2"),
-                ScottPlot.Color.FromHex("#59A14F"),
-                ScottPlot.Color.FromHex("#EDC948"),
-            };
-            for (int i = 0; i < barPlotObj.Bars.Count; i++)
-                barPlotObj.Bars[i].FillColor = colors[i % colors.Length];
+                _bladeDetector.ResetCalibration();
+                BaselineStatus = $"标定中 (0/{_bladeDetector.CalibrationPeriodsRequired})";
+                BladeAlarmText = "标定中";
+                BladeAlarmColor = ColorGray;
 
-            // 4. 添加柱顶数值标签
-            for (int i = 0; i < spacedPositions.Length; i++)
-            {
-                double x = spacedPositions[i];
-                double y = normalizedValues[i];
-                var txt = BarPlot.Add.Text(y.ToString("F2"), x, y + 0.03);
-                txt.LabelStyle.FontName = "微软雅黑";
-                txt.LabelStyle.FontSize = 18;
-                txt.LabelStyle.ForeColor = ScottPlot.Color.FromHex("#333333");
-                txt.LabelStyle.Alignment = Alignment.LowerCenter;
+                // 重置堵塞检测器
+                _blockageDetector.ResetCalibration();
+                BlockageBaselineText = $"标定中 (0/{_blockageDetector.CalibrationPeriodsRequired})";
+                BlockageAlarmText = "标定中";
+                BlockageAlarmColor = ColorGray;
+
+                // 重置螺栓松动检测器
+                _boltDetector.ResetCalibration();
+                BoltBaselineText = $"标定中 (0/{_boltDetector.CalibrationPeriodsRequired})";
+                BoltAlarmText = "标定中";
+                BoltAlarmColor = ColorGray;
+                BoltTempCompText = "待标定";
+
+                DiagnosisResult = "基线标定已重置（叶片不平衡 + 风口堵塞 + 螺栓松动），自动采集进行中...";
+                await Task.Delay(100); // UI 刷新
+                // 标定在 ProcessLoop 中自动进行 (前 30 期使用 Welford 算法)
             }
-
-            // 5. 配置 X 轴分类标签
-            ScottPlot.Tick[] ticks = spacedPositions
-                .Zip(labels, (pos, lbl) => new ScottPlot.Tick(pos, lbl))
-                .ToArray();
-            BarPlot.Axes.Bottom.TickGenerator = new ScottPlot.TickGenerators.NumericManual(ticks);
-            BarPlot.Axes.Bottom.MajorTickStyle.Length = 0;
-            BarPlot.Axes.Bottom.TickLabelStyle.FontName = "微软雅黑";
-            BarPlot.Axes.Bottom.TickLabelStyle.FontSize = 14;
-
-            // 6. 配置 Y 轴与边距
-            BarPlot.YLabel("置信度");
-            BarPlot.Axes.Left.Label.FontName = "微软雅黑";
-            BarPlot.Axes.Left.Label.FontSize = 18;
-            BarPlot.Axes.Left.TickLabelStyle.FontName = "微软雅黑";
-            BarPlot.Axes.Left.TickLabelStyle.FontSize = 18;
-            BarPlot.Axes.SetLimitsY(0, 1.1);
-            BarPlot.Axes.Margins(bottom: 0);
-
-            // 注：ScottPlot 5 控件绑定 Plot 实例后会自动监听内部变更并渲染，
-            // 此处无需调用 OnPropertyChanged(nameof(BarPlot))。
-            // 若 UI 未刷新，可在 XAML 绑定的控件上调用 .Render() 或触发 Plot 的 RenderRequest 事件。
+            catch (Exception ex)
+            {
+                DiagnosisResult = $"标定重置失败：{ex.Message}";
+            }
         }
 
         #endregion
 
         #region 资源释放
 
-        /// <summary>
-        /// 释放非托管资源与后台任务
-        /// </summary>
         public void Dispose()
         {
             _sensorDataService.MetadataUpdated -= OnSensorMetadataUpdated;
-
             _cts.Cancel();
             _cts.Dispose();
-
-            // 释放 ONNX 推理会话（仅当已创建时）
-            if (_inferenceI.IsValueCreated) _inferenceI.Value?.Dispose();
-            if (_inferenceJ.IsValueCreated) _inferenceJ.Value?.Dispose();
-            if (_inferenceK.IsValueCreated) _inferenceK.Value?.Dispose();
-            if (_inferenceL.IsValueCreated) _inferenceL.Value?.Dispose();
         }
 
         #endregion

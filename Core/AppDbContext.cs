@@ -129,13 +129,14 @@ namespace BearingFaultDiagnosis.Core
 
             modelBuilder.Entity<Menu>().HasData(
                 new Menu { Id = 1, Name = "实时监控看板", Route = "dashboard", Icon = "Monitor", SortOrder = 1, IsVisible = true },
-                new Menu { Id = 2, Name = "深度诊断", Route = "deep-diagnosis", Icon = "Stethoscope", SortOrder = 2, IsVisible = true },
-                new Menu { Id = 3, Name = "故障诊断报告", Route = "diagnosis-report", Icon = "FileText", SortOrder = 3, IsVisible = true },
+                new Menu { Id = 2, Name = "单机诊断监测", Route = "deep-diagnosis", Icon = "Stethoscope", SortOrder = 2, IsVisible = true },
+                new Menu { Id = 3, Name = "故障诊断报告", Route = "diagnosis-report", Icon = "FileText", SortOrder = 3, IsVisible = false },
                 new Menu { Id = 4, Name = "系统设置参数", Route = "system-settings", Icon = "Settings", SortOrder = 4, IsVisible = true },
-                new Menu { Id = 5, Name = "用户", Route = "users", Icon = "Users", SortOrder = 5, IsVisible = true },
-                new Menu { Id = 6, Name = "角色", Route = "roles", Icon = "Shield", SortOrder = 6, IsVisible = true },
-                new Menu { Id = 7, Name = "菜单", Route = "menus", Icon = "Menu", SortOrder = 7, IsVisible = true },
-                new Menu { Id = 8, Name = "设备管理", Route = "devices", Icon = "Cpu", SortOrder = 8, IsVisible = true }
+                new Menu { Id = 5, Name = "用户", Route = "users", Icon = "Users", SortOrder = 5, IsVisible = false },
+                new Menu { Id = 6, Name = "角色", Route = "roles", Icon = "Shield", SortOrder = 6, IsVisible = false },
+                new Menu { Id = 7, Name = "菜单", Route = "menus", Icon = "Menu", SortOrder = 7, IsVisible = false },
+                new Menu { Id = 8, Name = "设备管理", Route = "devices", Icon = "Cpu", SortOrder = 8, IsVisible = false },
+                new Menu { Id = 9, Name = "风机台账", Route = "bearing-info", Icon = "Folder", SortOrder = 3, IsVisible = true }
             );
 
             modelBuilder.Entity<RoleMenu>().HasData(
@@ -143,6 +144,7 @@ namespace BearingFaultDiagnosis.Core
                 new RoleMenu { RoleId = 2, MenuId = 2, GrantedAt = seedTime },
                 new RoleMenu { RoleId = 2, MenuId = 3, GrantedAt = seedTime },
                 new RoleMenu { RoleId = 2, MenuId = 4, GrantedAt = seedTime },
+                new RoleMenu { RoleId = 2, MenuId = 9, GrantedAt = seedTime },
                 new RoleMenu { RoleId = 1, MenuId = 1, GrantedAt = seedTime },
                 new RoleMenu { RoleId = 1, MenuId = 2, GrantedAt = seedTime },
                 new RoleMenu { RoleId = 1, MenuId = 3, GrantedAt = seedTime },
@@ -150,7 +152,8 @@ namespace BearingFaultDiagnosis.Core
                 new RoleMenu { RoleId = 1, MenuId = 5, GrantedAt = seedTime },
                 new RoleMenu { RoleId = 1, MenuId = 6, GrantedAt = seedTime },
                 new RoleMenu { RoleId = 1, MenuId = 7, GrantedAt = seedTime },
-                new RoleMenu { RoleId = 1, MenuId = 8, GrantedAt = seedTime }
+                new RoleMenu { RoleId = 1, MenuId = 8, GrantedAt = seedTime },
+                new RoleMenu { RoleId = 1, MenuId = 9, GrantedAt = seedTime }
             );
 
             modelBuilder.Entity<DeviceInfo>().HasData(

@@ -83,8 +83,8 @@ namespace BearingFaultDiagnosis.ViewModels
         public void StopServer()
         {
             _cts?.Cancel();
+            _tcpService.StopListening();
             _timer.Stop();
-            //同时停止读取文件数据
             _sensorDataService.StopFileReading();
         }
 

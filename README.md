@@ -1,19 +1,21 @@
 # 工业轴承故障智能诊断与预测性维护系统
 
-这是一个基于 .NET 8 构建的高性能跨平台设备健康监测上位机系统。通过采集并分析工业设备的高频振动数据，实现对设备早期故障的准确诊断与预测性维护，降低因设备意外停机带来的经济损失。
+基于 .NET 8 构建的高性能工业设备健康监测上位机系统。通过采集并分析振动、电流、倾角等多源传感器数据，实现对隧道射流风机三大典型故障的实时监测与早期预警。
 
 ## 技术栈
 
-`C#` | `WPF` | `C++` | `.NET 8` | `CommunityToolkit.Mvvm` | `Socket` | `ScottPlot` | `P/Invoke` | `FFTW` | `ONNX Runtime`
+`C#` | `WPF` | `C++` | `.NET 8` | `CommunityToolkit.Mvvm` | `ScottPlot 5` | `P/Invoke` | `FFTW` | `ONNX Runtime` | `Python`
 
-## 项目价值与参考意义
+## 核心特性
 
-本项目为 C#/.NET 开发者及工业互联网（IIoT）相关从业者提供以下技术实践参考：
-
-- **性能优化实践**：展示通过 `P/Invoke`、`unsafe` 内存锁定（Pinning）以及 `Span<T>` 等现代 C# 特性，在一定程度上降低常驻内存开销，实现托管与非托管代码间的高效数据传递。
-- **高频数据流治理**：通过原生 `TCP Socket` 异步模型，结合**生产者-消费者并发模型（ConcurrentQueue + Channel）**，探讨如何有效缓解高采样率环境下的界面响应延迟与内存积压问题。
-- **客户端架构设计**：提供基于 `.NET 8` 泛型主机（Generic Host）与 `MVVM` 模式构建桌面端应用的代码骨架，涵盖基础的依赖注入与组件生命周期管理。
-- **跨领域技术整合**：梳理软件工程实施与基础数字信号处理（如 DSP、FFT 算法）的结合流程，为设备健康管理（PHM）上位机系统的开发提供一条可供验证的实现路径。
+- **企业级应用架构：** 基于 .NET 8 泛型主机（Generic Host）与 MVVM 模式，依赖注入 + 组件生命周期管理。
+- **双模数据接入：** 实时 TCP 数据流（5 kHz 采样率）+ 离线 `.mat` 文件加载。
+- **高性能数据采集：** 原生 TCP Socket + 生产者-消费者并发模型（ConcurrentQueue + Channel）。
+- **跨语言零拷贝计算：** C++ FFTW/FFT 封装为 DLL，P/Invoke 零拷贝内存交互。
+- **CWT 连续小波时频热力图：** Morlet 小波 + FFTW 加速 + WriteableBitmap 像素渲染。
+- **AI 智能诊断：** ONNX Runtime 四模型并行推理，故障分类置信度评估。
+- **三大故障监测算法：** 叶片不平衡、风口堵塞、螺栓松动的实时监测与自动报警。
+- **传感器数据模拟器：** Python TCP 模拟器，支持四种故障模式实时切换。
 
 ## 界面概览
 
@@ -23,83 +25,270 @@
 ### 2. 深度诊断
 ![深度诊断](img/deep_diag.png)
 
-## 核心特性
+---
 
-- **企业级应用架构：** 基于 **.NET 8** 搭建跨平台 **MVVM** 客户端，并引入了泛型主机架构实现全局服务依赖注入与对象生命周期管理。
-- **双模数据接入机制：** 支持实时与离线两种数据流模式。一方面可利用原生的下位机高速通信接收实时振动数据流进行监控；另一方面支持直接解析加载本地已保存的 `.mat` 格式历史数据，方便复盘和算法对照分析。
-- **高性能数据采集：** 基于原生 **TCP Socket** 封装异步通信模块，引入**生产者-消费者**并发模型与 `ConcurrentQueue` 线程安全队列，可以安全稳定地处理每秒 2000 次的高频振动数据流。[深入了解 ConcurrentQueue 与无锁并发提取实现细节](TechnicalDetails.md)
-- **跨语言零拷贝计算优化：** 针对密集型计算场景设计了专用的 C++ 高性能计算模块。将 FFT（快速傅里叶变换）、阶次跟踪 (Order Tracking) 等核心算法采用 C++ 封装为动态链接库 (DLL)；通过 **P/Invoke** 实现 C# 与 C++ 数组之间的**零拷贝内存交互**，极大地避免了大量浮点数据在托管与非托管内存切换时引发的垃圾回收开销，显著提升了实时流数据的处理速度与系统吞吐量。[深入了解 P/Invoke 与跨语言零拷贝实现细节](TechnicalDetails.md)
-- **CWT 连续小波时频热力图：** 基于 Morlet 小波频域卷积的 CWT 算法，通过 FFTW 加速实现 128 个对数频率尺度 × 512 时间点的时频能量矩阵计算。采用 WPF 原生 WriteableBitmap 直接像素渲染，结合 Inferno 色图映射，直观展示振动信号的能量分布。[深入了解 CWT 热力图实现细节](TechnicalDetails.md)
-- **AI 智能诊断：** 集成 ONNX Runtime 推理引擎，并行部署多个故障诊断模型，基于多模型集成策略输出故障类别置信度，辅助运维人员进行设备状态评估。
+## 三大故障监测算法
 
+### 1. 叶片不平衡监测
 
+| 维度 | 实现 |
+|---|---|
+| 输入信号 | 振动加速度（主通道），5 kHz 采样率 |
+| 特征提取 | 1×fr 幅值 A₁（±2 bin 峰值搜索）、谐波比 R₂₁ = A₂/A₁、Goertzel 相位 σφ |
+| 平滑策略 | EWMA 指数加权移动平均（λ=0.15） |
+| 基线标定 | Welford 在线算法，前 30 期自动建立 μ/σ 基线 |
+| 判定逻辑 | A₁ > μ+3σ **且** R₂₁ < 0.3 **且** σφ < 15°，连续 ≥3 期 → 报警 |
+| 状态机 | Calibrating → Normal → Watch → Warning → Alarm |
+| 算法类 | [`Models/BladeImbalanceDetector.cs`](Models/BladeImbalanceDetector.cs) |
 
-## 项目结构说明
+### 2. 进/出风口堵塞监测
 
-本仓库采用多项目解决方案（包含 C# 前端及业务层与 C++ 算法层）：
+| 维度 | 实现 |
+|---|---|
+| 输入信号 | 电流 RMS（主通道） |
+| 特征提取 | 归一化偏差 ΔI = (E_n − μ_I) / σ_I |
+| 平滑策略 | EWMA（λ=0.15） |
+| 基线标定 | Welford 在线算法，720 期（~39 分钟）自动建立 |
+| 判定逻辑 | \|ΔI\| > 3（3σ 准则），连续 ≥60s（~19 期） → 报警 |
+| 状态机 | Calibrating → Normal → Warning → Alarm |
+| 算法类 | [`Models/BlockageDetector.cs`](Models/BlockageDetector.cs) |
 
-```text
- ┣ 📁 Behaviors       # 存放附加行为（Attached Behaviors）
- ┣ 📁 Controls        # 存放自定义控件（Custom Controls）或复用的 UserControl
- ┣ 📁 Converters      # 存放各种数据绑定转换器（IValueConverter / IMultiValueConverter）
- ┣ 📁 Core            # 核心基础类（如：中介者、基类、全局配置、常量等）
- ┣ 📁 Extensions      # 存放 C# 扩展方法
- ┣ 📁 HighPerformanceComputing # C++ 核心算法工程（负责 DSP、FFT 信号隔离计算与 DLL 导出）
- ┣ 📁 Models          # 存放数据模型、实体类、DTO 等
- ┣ 📁 Resources       # 存放静态资源(包含文字、图表、全局样式等)
- ┣ 📁 Services        # 存放业务服务、数据访问服务、通信等
- ┃  ┣ 📁 Interfaces   # 服务接口定义（如 ISensorDataService）
- ┃  ┗ 📁 Implements   # 服务接口实现 (依赖注入)
- ┣ 📁 ViewModels      # 存放视图模型类（包含业务逻辑和 UI 状态）
- ┣ 📁 Views           # 存放所有的 UI 视图
- ┃  ┣ 📁 Windows      # 存放独立的 Window
- ┃  ┗ 📁 Pages        # 存放页面（基于 Navigation）
- ┣ 📄 App.xaml        # 应用程序入口及资源引入
- ┗ 📄 MainWindow.xaml # 主窗体
+### 3. 安装螺栓松动监测
+
+| 维度 | 实现 |
+|---|---|
+| 输入信号 | 倾角传感器（主通道），**7×24 全时运行** |
+| 特征提取 | 静态分量 θ_DC、10 分钟滑动窗口、7 天线性回归漂移速率 dθ/dt |
+| 温度补偿 | 线性回归模型 θ = a·T + b，标定期间自动学习系数 |
+| 基线标定 | Welford 在线算法，200 期（~11 分钟，生产环境建议 ≥24h） |
+| 判定逻辑 | 两级阈值：Δθ > 0.1° 且 dθ/dt > 0 → 预警；Δθ > 0.3° → 报警 |
+| 状态机 | Calibrating → Normal → Warning → Alarm |
+| 算法类 | [`Models/BoltLoosenDetector.cs`](Models/BoltLoosenDetector.cs) |
+
+### 算法架构
+
+三个检测器遵循统一的设计模式：
+
+```
+独立算法类 (Models/*Detector.cs)
+├── *AlarmState 枚举        — 状态机定义
+├── *Result record          — 单次监测结果快照
+├── Process() 方法          — 每帧调用，输入原始数据，输出结果快照
+├── Welford 在线标定        — μ/σ 增量计算，无需存储历史数据
+├── ResetCalibration()      — 重置基线，支持手动重新标定
+└── 内部状态管理            — EWMA、连续计数、相位历史等
 ```
 
-## 快速启动
+### 标定时间参考
 
-1. 确保已安装好 **.NET 8 SDK** 以及支持 **C++ 桌面开发工作负载**（MSVC、C++ CMake 等）的 Visual Studio。
-2. 使用 `git clone https://github.com/dream-one/Bearing-Fault-Diagnosis.git` 将项目克隆至本地。
-3. 双击 `BearingFaultDiagnosis.sln` 打开项目。
-4. 编译时，Visual Studio 会自动按工程依赖顺序，先编译 `HighPerformanceComputing` 项目生成 DLL，再编译 C# 主程序。
-5. 在需要的情况下还原 NuGet 依赖。
-6. 点击上方「启动」编译并运行此上位机系统应用程序。
-
----
-
-## AI 智能诊断
-
-本项目在深度诊断页面（DeepDiagnosis）中集成了基于 **ONNX Runtime** 的 AI 推理引擎，通过并行部署四个 ONNX 模型进行集成推理，实现对轴承故障状态的智能分类与置信度评估。模型推理结果以柱状图形式实时展示在诊断界面，辅助运维人员进行设备状态判断。
-
-当前分类标签包括：正常状态、内圈早期损伤、外圈早期损伤。
+| 算法 | 标定期数 | 实际耗时 | 说明 |
+|---|---|---|---|
+| 叶片不平衡 | 30 期 | ~98 秒 | 自动标定 |
+| 风口堵塞 | 720 期 | ~39 分钟 | 自动标定 |
+| 螺栓松动 | 200 期 | ~11 分钟 | 测试值，生产建议 ≥24h |
 
 ---
 
-## 待办规划
+## 传感器数据模拟器
 
-### 短期
+[`Tools/sensor_simulator.py`](Tools/sensor_simulator.py) — 纯 Python 标准库实现的 TCP 传感器帧模拟器：
 
-1. **轴承参数管理页面** - 增加自定义修改轴承参数（几何尺寸、故障频率系数等）的配置页面，支持增删改查。
-2. **AI 诊断与图表联动** - 完善诊断结果与频谱图表的交互联动，点击概率柱状图可定位到对应故障频率区域。
+| 特性 | 说明 |
+|---|---|
+| 协议 | 93 字节 TCP 帧，与 `SensorFrameStruct` 完全一致 |
+| 速率 | 5000 Hz 实时发送，100 帧/批 |
+| 故障模式 | 正常运行、叶片不平衡、风口堵塞、螺栓松动（快捷键 1~4 切换） |
+| 严重程度 | `+/-` 键实时调节 0%~100% |
 
-### 长期
+```bash
+# WSL 中运行
+cd /mnt/d/上位机/BearingFaultDiagnosis/Tools
+python3 sensor_simulator.py --host <Windows主机IP> --port 5000
+```
 
-1. **健康因子与寿命预测** - 引入基于回归模型或时间序列模型（如 LSTM、Transformer、卡尔曼滤波退化模型），计算设备的健康因子 (Health Indicator, HI) 和剩余使用寿命 (Remaining Useful Life, RUL)，并用趋势曲线展示设备退化轨迹。
-2. **多维度越限报警系统** - 基于 ISO 10816 等国际标准的振动烈度报警阈值设置，结合看板上的温度、电流等参数实现多维度越限报警。在界面右上角增加报警消息中心，并可扩展邮件/企业微信/钉钉的 Webhook 推送。
-3. **特征趋势与 3D 频谱瀑布图** - 增加页面展示过去一周/一月的特征参数（RMS、峰值、峭度等）趋势线。引入 3D 瀑布图或彩图 (Color Map) 展示频谱随时间的变化（时间-频率-幅值），便于观察频率成分的演化过程。
-4. **标准工业协议支持** - 支持 OPC UA、Modbus TCP 等标准工业通信协议，便于与 PLC、DCS 等系统集成。
-5. **报告自动生成** - 一键生成包含图表截图、频域分析结论、AI 诊断置信度结果的 PDF 报告。
-6. **插件化架构** - 支持以插件形式动态加载 AI 模型或信号处理算法，无需修改主程序代码即可扩展功能。
-7. **边缘与云端协同** - 实现边缘端实时采集与推理、云端历史数据存储与模型迭代的协同架构。
+---
+
+## 单元测试
+
+共 **59 个测试用例**，覆盖三大算法的核心逻辑：
+
+| 测试文件 | 用例数 | 覆盖范围 |
+|---|---|---|
+| `BladeImbalanceDetectorTests.cs` | 27 | Goertzel 相位、峰值搜索、EWMA、标定、状态机 |
+| `BlockageDetectorTests.cs` | 16 | RMS 计算、Welford 基线、偏差判定、60s 持续性 |
+| `BoltLoosenDetectorTests.cs` | 16 | 滑动窗口、线性回归、温度补偿、两级阈值 |
+
+```powershell
+dotnet test Tests\BearingFaultDiagnosis.Tests.csproj
+```
+
+---
+
+## 项目结构
+
+```text
+ ┣ 📁 Models
+ ┃  ┣ 📄 BladeImbalanceDetector.cs   # 叶片不平衡检测引擎
+ ┃  ┣ 📄 BlockageDetector.cs         # 风口堵塞检测引擎
+ ┃  ┗ 📄 BoltLoosenDetector.cs       # 螺栓松动检测引擎
+ ┣ 📁 ViewModels
+ ┃  ┗ 📄 DeepDiagnosisViewModel.cs   # 三大检测器集成 + 数据管线
+ ┣ 📁 Views/Pages
+ ┃  ┣ 📄 DeepDiagnosisView.xaml      # 四卡片双行布局
+ ┃  ┗ 📄 DeepDiagnosisView.xaml.cs   # BindPlots + 线程安全渲染
+ ┣ 📁 Services
+ ┃  ┣ 📁 Interfaces                  # 服务接口定义
+ ┃  ┗ 📁 Implements                  # 服务实现（TCP、传感器数据、FFT 等）
+ ┣ 📁 HighPerformanceComputing       # C++ 算法层（FFT、阶次跟踪、CWT）
+ ┣ 📁 DLModels                       # ONNX 深度学习模型
+ ┣ 📁 Tests/Services
+ ┃  ┣ 📄 BladeImbalanceDetectorTests.cs
+ ┃  ┣ 📄 BlockageDetectorTests.cs
+ ┃  ┗ 📄 BoltLoosenDetectorTests.cs
+ ┣ 📁 Tools
+ ┃  ┗ 📄 sensor_simulator.py         # Python TCP 传感器模拟器
+ ┣ 📄 BearingFaultDiagnosis.sln      # 解决方案文件
+ ┗ 📄 appsettings.json               # 运行时配置（TCP 端口等）
+```
+
+---
+
+## 快速启动（开发环境）
+
+### 环境要求
+
+| 依赖 | 版本 | 说明 |
+|---|---|---|
+| .NET SDK | 8.0+ | [下载地址](https://dotnet.microsoft.com/download/dotnet/8.0) |
+| Visual Studio | 2022 | 需安装 **C++ 桌面开发** 工作负载（MSVC v145） |
+| Python（可选） | 3.10+ | 仅运行模拟器时需要 |
+
+### 步骤
+
+1. `git clone` 并打开 `BearingFaultDiagnosis.sln`。
+2. 将解决方案平台切换为 **x64**（C++ 项目仅支持 x64）。
+3. Visual Studio 自动按依赖顺序编译：先 C++ DLL → 再 C# 主程序。
+4. 按 F5 启动调试。
+
+---
+
+## 打包发布
+
+### 方式一：框架依赖发布（目标机器已安装 .NET 8）
+
+```powershell
+# 在项目根目录执行
+dotnet publish BearingFaultDiagnosis.csproj `
+    -c Release `
+    -r win-x64 `
+    --self-contained false `
+    -o publish\framework-dependent
+```
+
+发布后手动复制原生 DLL：
+
+```powershell
+# 复制 C++ 计算库和 FFTW3 依赖到发布目录
+copy bin\Release\net8.0-windows\HighPerformanceComputing.dll publish\framework-dependent\
+copy libs\fftw3\libfftw3-3.dll publish\framework-dependent\
+copy libs\fftw3\libfftw3f-3.dll publish\framework-dependent\
+copy libs\fftw3\libfftw3l-3.dll publish\framework-dependent\
+```
+
+### 方式二：自包含发布（目标机器无需安装 .NET）
+
+```powershell
+dotnet publish BearingFaultDiagnosis.csproj `
+    -c Release `
+    -r win-x64 `
+    --self-contained true `
+    -p:PublishSingleFile=false `
+    -o publish\self-contained
+```
+
+> **注意**：自包含模式不支持 SingleFile，因为 WPF 和本机 DLL 加载不兼容单文件打包。
+
+同样需要复制原生 DLL：
+
+```powershell
+copy bin\Release\net8.0-windows\HighPerformanceComputing.dll publish\self-contained\
+copy libs\fftw3\libfftw3-3.dll publish\self-contained\
+copy libs\fftw3\libfftw3f-3.dll publish\self-contained\
+copy libs\fftw3\libfftw3l-3.dll publish\self-contained\
+```
+
+### 发布目录结构
+
+发布完成后，发布目录应包含以下关键文件：
+
+```text
+publish/
+ ┣ 📄 BearingFaultDiagnosis.exe       # 主程序
+ ┣ 📄 HighPerformanceComputing.dll    # C++ FFT/阶次跟踪计算库
+ ┣ 📄 libfftw3-3.dll                  # FFTW3 双精度库
+ ┣ 📄 libfftw3f-3.dll                 # FFTW3 单精度库
+ ┣ 📄 libfftw3l-3.dll                 # FFTW3 长双精度库
+ ┣ 📄 appsettings.json                # 运行时配置
+ ┣ 📁 DLModels/                       # ONNX 模型文件
+ ┃  ┣ 📄 best_I_s2024.onnx
+ ┃  ┣ 📄 best_J_s2024.onnx
+ ┃  ┣ 📄 best_K_s2024.onnx
+ ┃  ┗ 📄 best_L_s2024.onnx
+ ┗ 📁 ...                             # .NET 运行时及其他依赖
+```
+
+---
+
+## 部署与使用
+
+### 部署到目标机器
+
+1. 将整个 `publish/` 目录复制到目标 Windows 机器（如 `C:\Program Files\BearingFaultDiagnosis\`）。
+2. 确保以下文件齐全：
+   - `BearingFaultDiagnosis.exe`
+   - `HighPerformanceComputing.dll`
+   - `libfftw3-3.dll` / `libfftw3f-3.dll` / `libfftw3l-3.dll`
+   - `appsettings.json`
+   - `DLModels/` 目录（含 4 个 .onnx 文件）
+3. 如果是框架依赖发布，目标机器需安装 [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)。
+
+### 配置
+
+编辑 `appsettings.json` 调整运行参数：
+
+```json
+{
+  "ServerSettings": {
+    "Port": 5000,          // TCP 监听端口（与下位机/模拟器端口一致）
+    "SampleRate": 5000     // 采样率 (Hz)
+  }
+}
+```
+
+### 运行
+
+1. 双击 `BearingFaultDiagnosis.exe` 启动上位机。
+2. 在主界面点击 **启动服务** 开始 TCP 监听。
+3. 下位机（STM32）或模拟器连接后，数据自动流入。
+4. 切换到 **深度诊断** 页面，观察四张算法监测卡片：
+   - **螺栓松动监测**（左上）— 7×24 全时运行，无需风机运转
+   - **风口堵塞预警**（左下）— 基于电流 RMS 偏差
+   - **叶片不平衡监测**（右上）— 基于振动频谱特征
+   - **辅助验证与环境补偿**（右下）— 温度 vs 倾角散点
+5. 各算法自动进入标定阶段，标定完成后进入正常监测模式。
+6. 点击 **执行基线标定** 按钮可手动重置所有算法的基线。
+
+### 使用模拟器测试（无下位机时）
+
+```bash
+# 在 WSL 或 Linux 环境中运行
+python3 Tools/sensor_simulator.py --host <上位机IP> --port 5000
+
+# 运行后按 1~4 切换故障模式，按 +/- 调节严重程度
+```
 
 ---
 
 ## 开源协议
 
 本项目基于 MIT 协议开源，详见 [LICENSE](LICENSE) 文件。
-
----
-
-如果遇到使用上的问题，欢迎在 GitHub 提交 Issue。

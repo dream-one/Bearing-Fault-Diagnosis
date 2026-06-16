@@ -43,9 +43,12 @@ namespace BearingFaultDiagnosis.ViewModels
                 List<Menu> menus = userService.GetMenusByRoleId(roleId);
                 foreach (var item in menus)
                 {
-                    NavigationItems.Add(item);
+                    if (item.IsVisible)
+                    {
+                        NavigationItems.Add(item);
+                    }
                 }
-                SelectedNavItem = NavigationItems.First();
+                SelectedNavItem = NavigationItems.FirstOrDefault(m => m.Route == "dashboard") ?? NavigationItems.FirstOrDefault();
             }
         }
         /// <summary>
